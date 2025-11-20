@@ -14,12 +14,20 @@
  * @module pages/customizations
  */
 
-export { useOrderCustomizations } from './useOrderCustomizations';
-export type {
-  OrderData,
-  UseOrderCustomizationsProps,
-  UseOrderCustomizationsReturn
-} from './types';
+export { useOrderCustomizations, getEpicorOrderId } from './useOrderCustomizations';
+export type { OrderData, UseOrderCustomizationsProps, UseOrderCustomizationsReturn } from './types';
+
+// Export custom order queries
+export {
+  getB2BAllOrders,
+  getBCAllOrders,
+  getOrderStatusType,
+  getBcOrderStatusType,
+  getOrdersCreatedByUser,
+  type CustomerOrderNode,
+  type CompanyOrderNode,
+  type ExtraField,
+} from './graphql/orders';
 
 // Add more exports here as you create additional customizations
 // Examples for other pages:

@@ -12,6 +12,15 @@ import { isB2BUserSelector, useAppSelector } from '@/store';
 import { CustomerRole } from '@/types';
 import { currencyFormat, displayFormat, ordersCurrencyFormat } from '@/utils';
 
+import {
+  getB2BAllOrders,
+  getBCAllOrders,
+  getBcOrderStatusType,
+  getEpicorOrderId,
+  getOrdersCreatedByUser,
+  getOrderStatusType,
+} from '../customizations';
+
 import OrderStatus from './components/OrderStatus';
 import { orderStatusTranslationVariables } from './shared/getOrderStatus';
 import { B3Table, PossibleNodeWrapper, TableColumnItem } from './table/B3Table';
@@ -25,14 +34,6 @@ import {
   sortKeys,
 } from './config';
 import { OrderItemCard } from './OrderItemCard';
-import {
-  getB2BAllOrders,
-  getBCAllOrders,
-  getBcOrderStatusType,
-  getOrdersCreatedByUser,
-  getOrderStatusType,
-} from './orders';
-import b2bFeatures from '@/store/slices/b2bFeatures';
 
 interface CompanyInfoProps {
   companyId: string;
@@ -57,6 +58,7 @@ interface ListItem {
   createdAt: string;
   companyName: string;
   companyInfo?: CompanyInfoProps;
+  extraInfo?: string;
 }
 
 interface SearchChangeProps {
@@ -222,10 +224,10 @@ function Order({ isCompanyOrder = false }: OrderProps) {
   }: Partial<FilterSearchProps>): Promise<{ edges: ListItem[]; totalCount: number }> => {
     const { edges = [], totalCount } = isB2BUser
       ? await getB2BAllOrders({
-        ...params,
-        email: getEmail(createdBy),
-        createdBy: getName(createdBy),
-      })
+          ...params,
+          email: getEmail(createdBy),
+          createdBy: getName(createdBy),
+        })
       : await getBCAllOrders(params);
 
     setAllTotal(totalCount);
@@ -239,7 +241,10 @@ function Order({ isCompanyOrder = false }: OrderProps) {
   const navigate = useNavigate();
 
   const goToDetail = (item: ListItem, index: number) => {
-    navigate(`/orderDetail/${item.orderId}`, {
+    // STATLAB CUSTOMIZATION: Use epicoreOrderId for URL if available
+    const displayId = getEpicorOrderId(item) || item.orderId;
+
+    navigate(`/orderDetail/${displayId}`, {
       state: {
         currentIndex: index,
         searchParams: {
@@ -260,7 +265,10 @@ function Order({ isCompanyOrder = false }: OrderProps) {
       title: b3Lang('orders.order'),
       width: '10%',
       isSortable: true,
-      render: ({ orderId }) => orderId,
+      render: (item) => {
+        // STATLAB CUSTOMIZATION: Display Epicor Order ID
+        return getEpicorOrderId(item) || item.orderId;
+      },
     },
     {
       key: 'companyName',

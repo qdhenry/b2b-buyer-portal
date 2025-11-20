@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 
 import type {
   ExtraField,
+  OrderData,
   UseOrderCustomizationsProps,
   UseOrderCustomizationsReturn,
 } from './types';
@@ -15,6 +16,37 @@ import type {
  *
  * @module pages/customizations/useOrderCustomizations
  */
+
+/**
+ * Helper function to extract Epicor Order ID from order data
+ * Checks extraFields first, then tries parsing extraInfo JSON
+ */
+export const getEpicorOrderId = (order: OrderData | null | undefined): string => {
+  if (!order) return '';
+
+  // Try extraFields
+  if (order.extraFields) {
+    const epicoreField = order.extraFields.find(
+      (field: ExtraField) => field.fieldName === 'epicoreOrderId',
+    );
+    if (epicoreField?.fieldValue) return epicoreField.fieldValue;
+  }
+
+  // Try extraInfo
+  if (order.extraInfo) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const extraFields = JSON.parse(order.extraInfo) as any[];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const epicoreField = extraFields?.find((f: any) => f.fieldName === 'epicoreOrderId');
+      if (epicoreField?.fieldValue) return epicoreField.fieldValue;
+    } catch (e) {
+      // ignore json parse error
+    }
+  }
+
+  return '';
+};
 
 /**
  * Hook to manage all Statlab-specific customizations for order details
@@ -35,19 +67,8 @@ export const useOrderCustomizations = ({
 
   // Extract epicoreOrderId from extraFields when order data changes
   useEffect(() => {
-    if (order?.extraFields) {
-      const epicoreField = order.extraFields.find(
-        (field: ExtraField) => field.fieldName === 'epicoreOrderId'
-      );
-
-      if (epicoreField?.fieldValue) {
-        setEpicoreOrderId(epicoreField.fieldValue);
-      } else {
-        setEpicoreOrderId('');
-      }
-    } else {
-      setEpicoreOrderId('');
-    }
+    const id = getEpicorOrderId(order);
+    setEpicoreOrderId(id);
   }, [order]);
 
   /**

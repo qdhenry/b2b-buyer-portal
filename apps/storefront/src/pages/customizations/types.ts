@@ -17,6 +17,7 @@ export interface ExtraField {
  */
 export interface OrderData {
   extraFields?: ExtraField[];
+  extraInfo?: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any;
 }

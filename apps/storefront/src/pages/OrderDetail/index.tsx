@@ -20,7 +20,13 @@ import { isB2BUserSelector, useAppSelector } from '@/store';
 import { AddressConfigItem, CustomerRole, OrderProductItem, OrderStatusItem } from '@/types';
 import b2bLogger from '@/utils/b3Logger';
 
-import { type OrderData, useOrderCustomizations } from '../customizations';
+import {
+  getB2BAllOrders,
+  getBCAllOrders,
+  getEpicorOrderId,
+  type OrderData,
+  useOrderCustomizations,
+} from '../customizations';
 import OrderStatus from '../order/components/OrderStatus';
 import { orderStatusTranslationVariables } from '../order/shared/getOrderStatus';
 
@@ -108,8 +114,34 @@ function OrderDetail() {
   useEffect(() => {
     if (orderId) {
       const getOrderDetails = async () => {
-        const id = parseInt(orderId, 10);
+        let id = parseInt(orderId, 10);
+        const isNumeric = /^\d+$/.test(orderId);
+
+        // STATLAB CUSTOMIZATION: Resolve Epicor ID to BC Order ID
+        if (!isNumeric) {
+          setIsRequestLoading(true);
+          try {
+            const fetcher = isB2BUser ? getB2BAllOrders : getBCAllOrders;
+
+            const { edges } = await fetcher({
+              q: orderId,
+              first: 50,
+              offset: 0,
+              orderBy: 'orderId-desc',
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            } as any);
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const match = edges.find((edge: any) => getEpicorOrderId(edge.node) === orderId);
+            if (match?.node?.orderId) {
+              id = parseInt(match.node.orderId, 10);
+            }
+          } catch (e) {
+            b2bLogger.error(e);
+          }
+        }
+
         if (!id) {
+          setIsRequestLoading(false);
           return;
         }
 
@@ -117,7 +149,6 @@ function OrderDetail() {
 
         try {
           const order = isB2BUser ? await getB2BOrderDetails(id) : await getBCOrderDetails(id);
-          console.log('order', order);
           if (order) {
             const { products, companyInfo } = order;
 
@@ -353,12 +384,12 @@ function OrderDetail() {
             sx={
               isMobile
                 ? {
-                  flexBasis: '100%',
-                }
+                    flexBasis: '100%',
+                  }
                 : {
-                  flexBasis: '690px',
-                  flexGrow: 1,
-                }
+                    flexBasis: '690px',
+                    flexGrow: 1,
+                  }
             }
           >
             <Stack spacing={3}>
@@ -373,11 +404,11 @@ function OrderDetail() {
             sx={
               isMobile
                 ? {
-                  flexBasis: '100%',
-                }
+                    flexBasis: '100%',
+                  }
                 : {
-                  flexBasis: '340px',
-                }
+                    flexBasis: '340px',
+                  }
             }
           >
             {JSON.stringify(orderSummary) === '{}' ? null : (

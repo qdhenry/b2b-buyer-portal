@@ -8,6 +8,8 @@ import Typography from '@mui/material/Typography';
 import { isB2BUserSelector, useAppSelector } from '@/store';
 import { currencyFormat, displayFormat } from '@/utils';
 
+import { getEpicorOrderId } from '../customizations';
+
 import OrderStatus from './components/OrderStatus';
 
 interface ListItem {
@@ -18,6 +20,7 @@ interface ListItem {
   status: string;
   totalIncTax: string;
   createdAt: string;
+  extraInfo?: string;
 }
 
 interface OrderItemCardProps {
@@ -45,6 +48,8 @@ export function OrderItemCard({ item, goToDetail }: OrderItemCardProps) {
     return `by ${customer.firstName} ${customer.lastName}`;
   };
 
+  const displayId = getEpicorOrderId(item) || item.orderId;
+
   return (
     <Card key={item.orderId}>
       <CardContent sx={{ color: 'rgba(0, 0, 0, 0.6)' }} onClick={goToDetail}>
@@ -61,7 +66,7 @@ export function OrderItemCard({ item, goToDetail }: OrderItemCardProps) {
                 color: 'rgba(0, 0, 0, 0.87)',
               }}
             >
-              {`# ${item.orderId}`}
+              {`# ${displayId}`}
             </Typography>
             <Typography
               sx={{
