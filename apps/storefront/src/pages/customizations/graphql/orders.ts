@@ -181,13 +181,12 @@ export const getOrdersExtraFields = async (
   const operationName = isB2BUser ? 'GetOrdersDetails' : 'GetCustomerOrdersDetails';
 
   // Construct batched query using aliases
-  // Example: order_123: order(id: 123) { orderId, extraFields { fieldName, fieldValue } }
+  // Example: order_123: order(id: 123) { extraFields { fieldName, fieldValue } }
   const queryParts = uniqueIds.map((id) => {
     // Ensure ID is safe for alias (remove non-alphanumeric if any, though usually IDs are safe)
     const safeId = String(id).replace(/[^a-zA-Z0-9]/g, '_');
     return `
       order_${safeId}: ${queryField}(id: ${id}) {
-        orderId
         extraFields {
           fieldName
           fieldValue
@@ -208,11 +207,14 @@ export const getOrdersExtraFields = async (
 
     const result: Record<string, ExtraField[]> = {};
 
-    // Parse response and map back to IDs
-    Object.keys(response).forEach((alias) => {
+    // Parse response and map back to IDs using the same alias logic
+    uniqueIds.forEach((id) => {
+      const safeId = String(id).replace(/[^a-zA-Z0-9]/g, '_');
+      const alias = `order_${safeId}`;
       const orderData = response[alias];
-      if (orderData && orderData.orderId && orderData.extraFields) {
-        result[orderData.orderId] = orderData.extraFields;
+
+      if (orderData && orderData.extraFields) {
+        result[String(id)] = orderData.extraFields;
       }
     });
 
