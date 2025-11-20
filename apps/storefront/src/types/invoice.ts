@@ -32,6 +32,9 @@ export interface InvoiceList {
   isCollapse?: boolean;
   disableCurrentCheckbox?: boolean;
   sortDirection?: string;
+  // STATLAB CUSTOMIZATION: Add extraFields and extraInfo for orderNumber lookup
+  extraFields?: ExtraField[];
+  extraInfo?: string;
 }
 
 export interface InvoiceListNode {

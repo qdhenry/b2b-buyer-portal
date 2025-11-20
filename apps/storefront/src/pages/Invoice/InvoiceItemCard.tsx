@@ -8,11 +8,13 @@ import { useB3Lang } from '@/lib/lang';
 import { InvoiceList, InvoiceListNode } from '@/types/invoice';
 import { currencyFormat, displayFormat } from '@/utils';
 
+import { ExtraField, getEpicorOrderId, OrderData } from '../customizations';
+
 import B3Pulldown from './components/B3Pulldown';
 import InvoiceStatus from './components/InvoiceStatus';
 
 interface InvoiceItemCardProps {
-  item: any;
+  item: InvoiceList;
   checkBox?: (disable: boolean) => ReactElement;
   handleSetSelectedInvoiceAccount: (value: string, id: string) => void;
   handleViewInvoice: (id: string, status: string | number, invoiceCompanyId: string) => void;
@@ -64,21 +66,24 @@ export function InvoiceItemCard(props: InvoiceItemCardProps) {
     {
       key: 'orderNumber',
       title: b3Lang('invoice.invoiceItemCardHeader.order'),
-      render: () => (
-        <Box
-          role="button"
-          sx={{
-            color: '#000000',
-            cursor: 'pointer',
-            textDecoration: 'underline',
-          }}
-          onClick={() => {
-            navigate(`/orderDetail/${item.orderNumber}`);
-          }}
-        >
-          {item?.orderNumber || '-'}
-        </Box>
-      ),
+      render: () => {
+        const displayOrderId = getEpicorOrderId(item) || item.orderNumber;
+        return (
+          <Box
+            role="button"
+            sx={{
+              color: '#000000',
+              cursor: 'pointer',
+              textDecoration: 'underline',
+            }}
+            onClick={() => {
+              navigate(`/orderDetail/${item.orderNumber}`);
+            }}
+          >
+            {displayOrderId || '-'}
+          </Box>
+        );
+      },
     },
     {
       key: 'createdAt',

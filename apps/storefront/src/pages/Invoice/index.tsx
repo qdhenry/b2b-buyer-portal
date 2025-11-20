@@ -13,7 +13,7 @@ import { useSort } from '@/hooks/useSort';
 import { useB3Lang } from '@/lib/lang';
 import { GlobalContext } from '@/shared/global';
 import { exportInvoicesAsCSV, getInvoiceList, getInvoiceStats } from '@/shared/service/b2b';
-import { rolePermissionSelector, useAppSelector } from '@/store';
+import { isB2BUserSelector, rolePermissionSelector, useAppSelector } from '@/store';
 import { CustomerRole } from '@/types';
 import { InvoiceList, InvoiceListNode } from '@/types/invoice';
 import {
@@ -29,6 +29,7 @@ import { b2bPermissionsMap } from '@/utils/b3CheckPermissions/config';
 import b2bLogger from '@/utils/b3Logger';
 
 import B3Filter from '../../components/filter/B3Filter';
+import { ExtraField, getEpicorOrderId, getOrdersExtraFields } from '../customizations';
 
 import B3Pulldown from './components/B3Pulldown';
 import InvoiceFooter from './components/InvoiceFooter';
@@ -479,12 +480,27 @@ function Invoice() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [checkedArr]);
 
+  const isB2BUser = useAppSelector(isB2BUserSelector);
+  const [extraFieldsMap, setExtraFieldsMap] = useState<Record<string, ExtraField[]>>({});
+
   const fetchList: GetRequestList<Partial<FilterSearchProps>, InvoiceList> = async (params) => {
     const {
       invoices: { edges, totalCount },
     } = await getInvoiceList(params);
 
     const invoicesList: InvoiceListNode[] = edges;
+
+    // STATLAB CUSTOMIZATION: Fetch extra fields for displayed order numbers
+    const orderNumbersToFetch = Array.from(new Set(invoicesList.map((item) => item.node.orderNumber).filter((id) => id)));
+    let extraFieldsMapData: Record<string, ExtraField[]> = {};
+    if (orderNumbersToFetch.length > 0) {
+      try {
+        extraFieldsMapData = await getOrdersExtraFields(orderNumbersToFetch, isB2BUser);
+      } catch (e) {
+        b2bLogger.error('Error fetching extra fields for invoices', e);
+      }
+    }
+    setExtraFieldsMap(extraFieldsMapData);
 
     if (type === InvoiceListType.DETAIL && invoicesList.length) {
       invoicesList.forEach((invoice: InvoiceListNode) => {
@@ -589,23 +605,31 @@ function Invoice() {
       key: 'orderNumber',
       title: b3Lang('invoice.headers.order'),
       isSortable: true,
-      render: (item: InvoiceList) => (
-        <Box
-          role="button"
-          sx={{
-            color: '#000000',
-            cursor: 'pointer',
-            ':hover': {
-              textDecoration: 'underline',
-            },
-          }}
-          onClick={() => {
-            navigate(`/orderDetail/${item.orderNumber}`);
-          }}
-        >
-          {item?.orderNumber || '-'}
-        </Box>
-      ),
+      render: (item: InvoiceList) => {
+        const itemWithExtraFields = {
+          ...item,
+          extraFields: extraFieldsMap[item.orderNumber] || item.extraFields,
+        };
+        const displayOrderId = getEpicorOrderId(itemWithExtraFields) || item.orderNumber;
+
+        return (
+          <Box
+            role="button"
+            sx={{
+              color: '#000000',
+              cursor: 'pointer',
+              ':hover': {
+                textDecoration: 'underline',
+              },
+            }}
+            onClick={() => {
+              navigate(`/orderDetail/${item.orderNumber}`);
+            }}
+          >
+            {displayOrderId || '-'}
+          </Box>
+        );
+      },
       width: '12%',
     },
     {
@@ -962,26 +986,33 @@ function Invoice() {
           isSelectOtherPageCheckbox
           hover
           isAutoRefresh={false}
-          renderItem={(row, index, checkBox) => (
-            <InvoiceItemCard
-              item={row}
-              checkBox={checkBox}
-              handleSetSelectedInvoiceAccount={handleSetSelectedInvoiceAccountNumber}
-              handleViewInvoice={handleViewInvoice}
-              setIsRequestLoading={setIsRequestLoading}
-              setInvoiceId={setCurrentInvoiceId}
-              handleOpenHistoryModal={setIsOpenHistory}
-              selectedPay={selectedPay}
-              handleGetCorrespondingCurrency={handleGetCorrespondingCurrencyToken}
-              addBottom={list.length - 1 === index}
-              isCurrentCompany={Number(currentCompanyId) === Number(row.companyInfo.companyId)}
-              invoicePay={
-                Number(currentCompanyId) === Number(row.companyInfo.companyId)
-                  ? invoicePayPermission
-                  : invoiceSubPayPermission
-              }
-            />
-          )}
+          renderItem={(row, index, checkBox) => {
+            const itemWithExtraFields = {
+              ...row,
+              extraFields: extraFieldsMap[row.orderNumber] || row.extraFields,
+            };
+
+            return (
+              <InvoiceItemCard
+                item={itemWithExtraFields}
+                checkBox={checkBox}
+                handleSetSelectedInvoiceAccount={handleSetSelectedInvoiceAccountNumber}
+                handleViewInvoice={handleViewInvoice}
+                setIsRequestLoading={setIsRequestLoading}
+                setInvoiceId={setCurrentInvoiceId}
+                handleOpenHistoryModal={setIsOpenHistory}
+                selectedPay={selectedPay}
+                handleGetCorrespondingCurrency={handleGetCorrespondingCurrencyToken}
+                addBottom={list.length - 1 === index}
+                isCurrentCompany={Number(currentCompanyId) === Number(row.companyInfo.companyId)}
+                invoicePay={
+                  Number(currentCompanyId) === Number(row.companyInfo.companyId)
+                    ? invoicePayPermission
+                    : invoiceSubPayPermission
+                }
+              />
+            );
+          }}
         />
         {list.length > 0 && !isMobile && (
           <Box
