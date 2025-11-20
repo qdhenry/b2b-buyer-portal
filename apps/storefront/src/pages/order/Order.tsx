@@ -32,6 +32,7 @@ import {
   getOrdersCreatedByUser,
   getOrderStatusType,
 } from './orders';
+import b2bFeatures from '@/store/slices/b2bFeatures';
 
 interface CompanyInfoProps {
   companyId: string;
@@ -221,10 +222,10 @@ function Order({ isCompanyOrder = false }: OrderProps) {
   }: Partial<FilterSearchProps>): Promise<{ edges: ListItem[]; totalCount: number }> => {
     const { edges = [], totalCount } = isB2BUser
       ? await getB2BAllOrders({
-          ...params,
-          email: getEmail(createdBy),
-          createdBy: getName(createdBy),
-        })
+        ...params,
+        email: getEmail(createdBy),
+        createdBy: getName(createdBy),
+      })
       : await getBCAllOrders(params);
 
     setAllTotal(totalCount);
