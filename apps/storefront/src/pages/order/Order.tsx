@@ -271,6 +271,7 @@ function Order({ isCompanyOrder = false }: OrderProps) {
 
     navigate(`/orderDetail/${displayId}`, {
       state: {
+        id: item.orderId,
         currentIndex: index,
         searchParams: {
           ...filterData,

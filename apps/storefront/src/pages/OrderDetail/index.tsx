@@ -40,6 +40,7 @@ import convertB2BOrderDetails from './shared/B2BOrderData';
 
 interface LocationState {
   isCompanyOrder: boolean;
+  id?: string;
 }
 
 function OrderDetail() {
@@ -104,8 +105,13 @@ function OrderDetail() {
   const { getDisplayOrderId } = useOrderCustomizations({ order: orderData });
 
   useEffect(() => {
-    setOrderId(params.id || '');
-  }, [params]);
+    const stateId = (location.state as LocationState)?.id;
+    if (stateId) {
+      setOrderId(stateId);
+    } else {
+      setOrderId(params.id || '');
+    }
+  }, [params, location.state]);
 
   const goToOrders = () => {
     navigate((location.state as LocationState).isCompanyOrder ? '/company-orders' : '/orders');
@@ -115,10 +121,14 @@ function OrderDetail() {
     if (orderId) {
       const getOrderDetails = async () => {
         let id = parseInt(orderId, 10);
-        const isNumeric = /^\d+$/.test(orderId);
 
         // STATLAB CUSTOMIZATION: Resolve Epicor ID to BC Order ID
-        if (!isNumeric) {
+        // If we have a state ID that matches current orderId, we trust it's the BC ID.
+        // Otherwise (direct URL access), we try to resolve the ID which might be an Epicor ID.
+        const stateId = (location.state as LocationState)?.id;
+        const isStateIdAuth = stateId && String(stateId) === String(orderId);
+
+        if (!isStateIdAuth) {
           setIsRequestLoading(true);
           try {
             const fetcher = isB2BUser ? getB2BAllOrders : getBCAllOrders;
@@ -130,6 +140,7 @@ function OrderDetail() {
               orderBy: 'orderId-desc',
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
             } as any);
+
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const match = edges.find((edge: any) => getEpicorOrderId(edge.node) === orderId);
             if (match?.node?.orderId) {
