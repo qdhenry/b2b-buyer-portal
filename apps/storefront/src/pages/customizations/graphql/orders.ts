@@ -1,6 +1,7 @@
 import B3Request from '@/shared/service/request/b3Fetch';
 import { OrderStatusItem } from '@/types';
 import { convertArrayToGraphql } from '@/utils';
+import b2bLogger from '@/utils/b3Logger';
 
 export type ExtraField = {
   fieldName: string;
@@ -156,3 +157,68 @@ export const getOrdersCreatedByUser = (companyId: number) =>
   B3Request.graphqlB2B({
     query: getCreatedByUser(companyId),
   });
+
+/**
+ * Fetches extra fields for a list of order IDs by batching them into a single GraphQL query.
+ * Uses aliases to fetch multiple orders in one request.
+ *
+ * @param ids Array of order IDs (strings or numbers)
+ * @param isB2BUser Boolean indicating if the user is a B2B user (affects query field name)
+ * @returns Promise resolving to a map of orderId -> ExtraField[]
+ */
+export const getOrdersExtraFields = async (
+  ids: (string | number)[],
+  isB2BUser: boolean,
+): Promise<Record<string, ExtraField[]>> => {
+  if (!ids.length) return {};
+
+  // Sanitize IDs and ensure uniqueness
+  const uniqueIds = [...new Set(ids)].filter((id) => id);
+  if (!uniqueIds.length) return {};
+
+  // Determine query field name based on user type
+  const queryField = isB2BUser ? 'order' : 'customerOrder';
+  const operationName = isB2BUser ? 'GetOrdersDetails' : 'GetCustomerOrdersDetails';
+
+  // Construct batched query using aliases
+  // Example: order_123: order(id: 123) { orderId, extraFields { fieldName, fieldValue } }
+  const queryParts = uniqueIds.map((id) => {
+    // Ensure ID is safe for alias (remove non-alphanumeric if any, though usually IDs are safe)
+    const safeId = String(id).replace(/[^a-zA-Z0-9]/g, '_');
+    return `
+      order_${safeId}: ${queryField}(id: ${id}) {
+        orderId
+        extraFields {
+          fieldName
+          fieldValue
+        }
+      }
+    `;
+  });
+
+  const query = `
+    query ${operationName} {
+      ${queryParts.join('\n')}
+    }
+  `;
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const response: any = await B3Request.graphqlB2B({ query });
+
+    const result: Record<string, ExtraField[]> = {};
+
+    // Parse response and map back to IDs
+    Object.keys(response).forEach((alias) => {
+      const orderData = response[alias];
+      if (orderData && orderData.orderId && orderData.extraFields) {
+        result[orderData.orderId] = orderData.extraFields;
+      }
+    });
+
+    return result;
+  } catch (error) {
+    b2bLogger.error(error);
+    return {};
+  }
+};

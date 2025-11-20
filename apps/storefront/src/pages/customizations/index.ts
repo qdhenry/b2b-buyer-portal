@@ -24,6 +24,7 @@ export {
   getOrderStatusType,
   getBcOrderStatusType,
   getOrdersCreatedByUser,
+  getOrdersExtraFields,
   type CustomerOrderNode,
   type CompanyOrderNode,
   type ExtraField,

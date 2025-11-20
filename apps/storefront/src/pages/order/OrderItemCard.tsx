@@ -8,7 +8,7 @@ import Typography from '@mui/material/Typography';
 import { isB2BUserSelector, useAppSelector } from '@/store';
 import { currencyFormat, displayFormat } from '@/utils';
 
-import { getEpicorOrderId } from '../customizations';
+import { type ExtraField, getEpicorOrderId } from '../customizations';
 
 import OrderStatus from './components/OrderStatus';
 
@@ -21,6 +21,7 @@ interface ListItem {
   totalIncTax: string;
   createdAt: string;
   extraInfo?: string;
+  extraFields?: ExtraField[];
 }
 
 interface OrderItemCardProps {
