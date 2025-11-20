@@ -11,16 +11,13 @@ import { useB3Lang } from '@/lib/lang';
 import { isB2BUserSelector, useAppSelector } from '@/store';
 import { CustomerRole } from '@/types';
 import { currencyFormat, displayFormat, ordersCurrencyFormat } from '@/utils';
-import b2bLogger from '@/utils/b3Logger';
 
 import {
-  type ExtraField,
   getB2BAllOrders,
   getBCAllOrders,
   getBcOrderStatusType,
   getEpicorOrderId,
   getOrdersCreatedByUser,
-  getOrdersExtraFields,
   getOrderStatusType,
 } from '../customizations';
 
@@ -62,8 +59,6 @@ interface ListItem {
   companyName: string;
   companyInfo?: CompanyInfoProps;
   extraInfo?: string;
-  // STATLAB CUSTOMIZATION: Enriched extra fields
-  extraFields?: ExtraField[];
 }
 
 interface SearchChangeProps {
@@ -144,9 +139,6 @@ function Order({ isCompanyOrder = false }: OrderProps) {
   const [filterData, setFilterData] = useState<Partial<FilterSearchProps>>();
   const [filterInfo, setFilterInfo] = useState<Array<any>>([]);
   const [getOrderStatuses, setOrderStatuses] = useState<Array<any>>([]);
-
-  // STATLAB CUSTOMIZATION: Store enriched extra fields
-  const [extraFieldsMap, setExtraFieldsMap] = useState<Record<string, ExtraField[]>>({});
 
   const [orderBy, setOrderBy] = useState<OrderBy>({
     key: 'orderId',
@@ -250,11 +242,7 @@ function Order({ isCompanyOrder = false }: OrderProps) {
 
   const goToDetail = (item: ListItem, index: number) => {
     // STATLAB CUSTOMIZATION: Use epicoreOrderId for URL if available
-    const itemWithExtraFields = {
-      ...item,
-      extraFields: extraFieldsMap[item.orderId] || item.extraFields,
-    };
-    const displayId = getEpicorOrderId(itemWithExtraFields) || item.orderId;
+    const displayId = getEpicorOrderId(item) || item.orderId;
 
     navigate(`/orderDetail/${displayId}`, {
       state: {
@@ -279,11 +267,7 @@ function Order({ isCompanyOrder = false }: OrderProps) {
       isSortable: true,
       render: (item) => {
         // STATLAB CUSTOMIZATION: Display Epicor Order ID
-        const itemWithExtraFields = {
-          ...item,
-          extraFields: extraFieldsMap[item.orderId] || item.extraFields,
-        };
-        return getEpicorOrderId(itemWithExtraFields) || item.orderId;
+        return getEpicorOrderId(item) || item.orderId;
       },
     },
     {
@@ -399,28 +383,6 @@ function Order({ isCompanyOrder = false }: OrderProps) {
     queryFn: () => fetchList({ ...filterData, ...pagination, orderBy: getOrderBy(orderBy) }),
   });
 
-  // STATLAB CUSTOMIZATION: Fetch extra fields for displayed orders
-  useEffect(() => {
-    const fetchExtraFields = async () => {
-      if (!data?.edges?.length) return;
-
-      const idsToFetch = data.edges
-        .map((item) => item.orderId)
-        .filter((id) => id && !extraFieldsMap[id]); // Only fetch if not already in map
-
-      if (idsToFetch.length > 0) {
-        try {
-          const newFields = await getOrdersExtraFields(idsToFetch, isB2BUser);
-          setExtraFieldsMap((prev) => ({ ...prev, ...newFields }));
-        } catch (e) {
-          b2bLogger.error(e);
-        }
-      }
-    };
-
-    fetchExtraFields();
-  }, [data?.edges, isB2BUser, extraFieldsMap]);
-
   return (
     <B3Spin isSpinning={isFetching}>
       <Box
@@ -477,19 +439,9 @@ function Order({ isCompanyOrder = false }: OrderProps) {
           pagination={{ ...pagination, count: data?.totalCount || 0 }}
           onPaginationChange={setPagination}
           isInfiniteScroll={isMobile}
-          renderItem={(row, index) => {
-            const itemWithExtraFields = {
-              ...row,
-              extraFields: extraFieldsMap[row.orderId] || row.extraFields,
-            };
-            return (
-              <OrderItemCard
-                key={row.orderId}
-                goToDetail={() => goToDetail(row, index)}
-                item={itemWithExtraFields}
-              />
-            );
-          }}
+          renderItem={(row, index) => (
+            <OrderItemCard key={row.orderId} goToDetail={() => goToDetail(row, index)} item={row} />
+          )}
           onClickRow={goToDetail}
           sortDirection={orderBy.dir}
           sortByFn={handleSetOrderBy}

@@ -5,18 +5,9 @@
  */
 
 /**
- * Represents an extra field in the order data
- */
-export interface ExtraField {
-  fieldName: string;
-  fieldValue: string;
-}
-
-/**
- * Represents order data structure with optional extraFields
+ * Represents order data structure with optional extraInfo
  */
 export interface OrderData {
-  extraFields?: ExtraField[];
   extraInfo?: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any;
@@ -27,7 +18,7 @@ export interface OrderData {
  */
 export interface UseOrderCustomizationsProps {
   /**
-   * The order data object containing extraFields and other order information
+   * The order data object containing extraInfo and other order information
    */
   order: OrderData | null;
 }
@@ -37,7 +28,7 @@ export interface UseOrderCustomizationsProps {
  */
 export interface UseOrderCustomizationsReturn {
   /**
-   * The Epicor order ID extracted from extraFields
+   * The Epicor order ID extracted from extraInfo
    * Falls back to empty string if not found
    */
   epicoreOrderId: string;

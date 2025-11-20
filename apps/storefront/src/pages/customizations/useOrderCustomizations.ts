@@ -1,11 +1,6 @@
 import { useEffect, useState } from 'react';
 
-import type {
-  ExtraField,
-  OrderData,
-  UseOrderCustomizationsProps,
-  UseOrderCustomizationsReturn,
-} from './types';
+import type { OrderData, UseOrderCustomizationsProps, UseOrderCustomizationsReturn } from './types';
 
 /**
  * Custom hook for Statlab-specific order customizations
@@ -19,18 +14,10 @@ import type {
 
 /**
  * Helper function to extract Epicor Order ID from order data
- * Checks extraFields first, then tries parsing extraInfo JSON
+ * Parses extraInfo JSON to find the epicoreOrderId.
  */
 export const getEpicorOrderId = (order: OrderData | null | undefined): string => {
   if (!order) return '';
-
-  // Try extraFields
-  if (order.extraFields) {
-    const epicoreField = order.extraFields.find(
-      (field: ExtraField) => field.fieldName === 'epicoreOrderId',
-    );
-    if (epicoreField?.fieldValue) return epicoreField.fieldValue;
-  }
 
   // Try extraInfo
   if (order.extraInfo) {
@@ -65,7 +52,7 @@ export const useOrderCustomizations = ({
 }: UseOrderCustomizationsProps): UseOrderCustomizationsReturn => {
   const [epicoreOrderId, setEpicoreOrderId] = useState<string>('');
 
-  // Extract epicoreOrderId from extraFields when order data changes
+  // Extract epicoreOrderId from extraInfo when order data changes
   useEffect(() => {
     const id = getEpicorOrderId(order);
     setEpicoreOrderId(id);
