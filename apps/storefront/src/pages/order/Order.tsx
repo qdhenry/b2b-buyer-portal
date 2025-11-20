@@ -11,13 +11,16 @@ import { useB3Lang } from '@/lib/lang';
 import { isB2BUserSelector, useAppSelector } from '@/store';
 import { CustomerRole } from '@/types';
 import { currencyFormat, displayFormat, ordersCurrencyFormat } from '@/utils';
+import b2bLogger from '@/utils/b3Logger';
 
 import {
+  type ExtraField,
   getB2BAllOrders,
   getBCAllOrders,
   getBcOrderStatusType,
   getEpicorOrderId,
   getOrdersCreatedByUser,
+  getOrdersExtraFields,
   getOrderStatusType,
 } from '../customizations';
 
@@ -59,6 +62,7 @@ interface ListItem {
   companyName: string;
   companyInfo?: CompanyInfoProps;
   extraInfo?: string;
+  extraFields?: ExtraField[];
 }
 
 interface SearchChangeProps {
@@ -139,6 +143,9 @@ function Order({ isCompanyOrder = false }: OrderProps) {
   const [filterData, setFilterData] = useState<Partial<FilterSearchProps>>();
   const [filterInfo, setFilterInfo] = useState<Array<any>>([]);
   const [getOrderStatuses, setOrderStatuses] = useState<Array<any>>([]);
+
+  // STATLAB CUSTOMIZATION: Store enriched extra fields
+  const [extraFieldsMap, setExtraFieldsMap] = useState<Record<string, ExtraField[]>>({});
 
   const [orderBy, setOrderBy] = useState<OrderBy>({
     key: 'orderId',
@@ -232,6 +239,20 @@ function Order({ isCompanyOrder = false }: OrderProps) {
 
     setAllTotal(totalCount);
 
+    // STATLAB CUSTOMIZATION: Fetch extra fields for displayed orders
+    const idsToFetch = edges.map((item) => item.node.orderId).filter((id) => id);
+    let extraFieldsMapData: Record<string, ExtraField[]> = {};
+    if (idsToFetch.length > 0) {
+      try {
+        extraFieldsMapData = await getOrdersExtraFields(idsToFetch, isB2BUser);
+      } catch (e) {
+        b2bLogger.error('Error fetching extra fields in fetchList', e);
+      }
+    }
+
+    // Update extraFieldsMap state after all fetches are done
+    setExtraFieldsMap(extraFieldsMapData);
+
     return {
       edges: edges.map((row: PossibleNodeWrapper<object>) => ('node' in row ? row.node : row)),
       totalCount,
@@ -242,7 +263,11 @@ function Order({ isCompanyOrder = false }: OrderProps) {
 
   const goToDetail = (item: ListItem, index: number) => {
     // STATLAB CUSTOMIZATION: Use epicoreOrderId for URL if available
-    const displayId = getEpicorOrderId(item) || item.orderId;
+    const itemWithExtraFields = {
+      ...item,
+      extraFields: extraFieldsMap[item.orderId] || item.extraFields,
+    };
+    const displayId = getEpicorOrderId(itemWithExtraFields) || item.orderId;
 
     navigate(`/orderDetail/${displayId}`, {
       state: {
@@ -267,7 +292,11 @@ function Order({ isCompanyOrder = false }: OrderProps) {
       isSortable: true,
       render: (item) => {
         // STATLAB CUSTOMIZATION: Display Epicor Order ID
-        return getEpicorOrderId(item) || item.orderId;
+        const itemWithExtraFields = {
+          ...item,
+          extraFields: extraFieldsMap[item.orderId] || item.extraFields,
+        };
+        return getEpicorOrderId(itemWithExtraFields) || item.orderId;
       },
     },
     {
@@ -439,9 +468,19 @@ function Order({ isCompanyOrder = false }: OrderProps) {
           pagination={{ ...pagination, count: data?.totalCount || 0 }}
           onPaginationChange={setPagination}
           isInfiniteScroll={isMobile}
-          renderItem={(row, index) => (
-            <OrderItemCard key={row.orderId} goToDetail={() => goToDetail(row, index)} item={row} />
-          )}
+          renderItem={(row, index) => {
+            const itemWithExtraFields = {
+              ...row,
+              extraFields: extraFieldsMap[row.orderId] || row.extraFields,
+            };
+            return (
+              <OrderItemCard
+                key={row.orderId}
+                goToDetail={() => goToDetail(row, index)}
+                item={itemWithExtraFields}
+              />
+            );
+          }}
           onClickRow={goToDetail}
           sortDirection={orderBy.dir}
           sortByFn={handleSetOrderBy}

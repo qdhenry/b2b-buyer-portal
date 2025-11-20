@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
 
-import type { OrderData, UseOrderCustomizationsProps, UseOrderCustomizationsReturn } from './types';
+import type {
+  ExtraField,
+  OrderData,
+  UseOrderCustomizationsProps,
+  UseOrderCustomizationsReturn,
+} from './types';
 
 /**
  * Custom hook for Statlab-specific order customizations
@@ -13,13 +18,25 @@ import type { OrderData, UseOrderCustomizationsProps, UseOrderCustomizationsRetu
  */
 
 /**
- * Helper function to extract Epicor Order ID from order data
- * Parses extraInfo JSON to find the epicoreOrderId.
+ * Helper function to extract Epicor Order ID from order data.
+ * Prioritizes checking `order.extraFields` (available on detail views) and
+ * falls back to parsing `order.extraInfo` (a JSON string available on list views).
+ *
+ * @param order The order data object.
+ * @returns The extracted Epicor Order ID, or an empty string if not found.
  */
 export const getEpicorOrderId = (order: OrderData | null | undefined): string => {
   if (!order) return '';
 
-  // Try extraInfo
+  // Try extraFields (available in detail view)
+  if (order.extraFields) {
+    const epicoreField = order.extraFields.find(
+      (field: ExtraField) => field.fieldName === 'epicoreOrderId',
+    );
+    if (epicoreField?.fieldValue) return epicoreField.fieldValue;
+  }
+
+  // Fallback to extraInfo (available in list view as JSON string)
   if (order.extraInfo) {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -52,7 +69,7 @@ export const useOrderCustomizations = ({
 }: UseOrderCustomizationsProps): UseOrderCustomizationsReturn => {
   const [epicoreOrderId, setEpicoreOrderId] = useState<string>('');
 
-  // Extract epicoreOrderId from extraInfo when order data changes
+  // Extract epicoreOrderId from order data when it changes
   useEffect(() => {
     const id = getEpicorOrderId(order);
     setEpicoreOrderId(id);

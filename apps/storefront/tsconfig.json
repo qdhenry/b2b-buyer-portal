@@ -20,7 +20,7 @@
     "declaration": false,
     "declarationMap": false,
     "inlineSources": false,
-    "moduleResolution": "bundler",
+    "moduleResolution": "node",
     "preserveWatchOutput": true,
     "allowSyntheticDefaultImports": true,
     "baseUrl": "./",
