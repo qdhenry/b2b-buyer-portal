@@ -1,24 +1,20 @@
 import { SyntheticEvent, useEffect, useRef, useState } from 'react';
 import { Resizable } from 'react-resizable';
-import { Box } from '@mui/material';
+import { Box, Typography } from '@mui/material';
 // cspell:disable-next-line
 import PDFObject from 'pdfobject';
 
 import B3Spin from '@/components/spin/B3Spin';
+import { InvoiceList } from '@/types/invoice';
 import { snackbar } from '@/utils';
 
-import { handlePrintPDF } from '../utils/pdf';
-
-interface RowList {
-  id: string;
-  createdAt: number;
-  updatedAt: number;
-}
+import { getEpicorOrderId } from '../../customizations';
+import { getInvoicePdfUrl } from '../utils/pdf';
 
 const templateMinHeight = 300;
 
 interface PrintTemplateProps {
-  row: RowList;
+  row: InvoiceList;
 }
 
 function PrintTemplate({ row }: PrintTemplateProps) {
@@ -38,22 +34,19 @@ function PrintTemplate({ row }: PrintTemplateProps) {
   };
 
   useEffect(() => {
-    const viewPrint = async () => {
+    const viewPrint = () => {
       setLoading(true);
-      const { id: invoiceId } = row;
+      try {
+        const invoicePDFUrl = getInvoicePdfUrl(row);
 
-      const invoicePDFUrl = await handlePrintPDF(invoiceId);
-
-      if (!invoicePDFUrl) {
-        snackbar.error('pdf url resolution error');
-        return;
+        if (container.current) {
+          PDFObject.embed(invoicePDFUrl, container.current);
+        }
+      } catch (e) {
+        snackbar.error('Error generating PDF');
+      } finally {
+        setLoading(false);
       }
-
-      if (!container?.current) return;
-
-      PDFObject.embed(invoicePDFUrl, container.current);
-
-      setLoading(false);
     };
 
     viewPrint();
@@ -62,6 +55,8 @@ function PrintTemplate({ row }: PrintTemplateProps) {
       container.current = null;
     };
   }, [row]);
+
+  const epicorOrderId = getEpicorOrderId(row);
 
   return (
     <B3Spin isSpinning={loading}>
@@ -95,6 +90,22 @@ function PrintTemplate({ row }: PrintTemplateProps) {
           },
         }}
       >
+        {(epicorOrderId || row.orderNumber) && (
+          <Box
+            sx={{
+              width: '100%',
+              padding: '10px 16px',
+              backgroundColor: '#f5f5f5',
+              borderBottom: '1px solid #e0e0e0',
+              display: 'flex',
+              alignItems: 'center',
+            }}
+          >
+            <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
+              Order ID: {epicorOrderId || row.orderNumber}
+            </Typography>
+          </Box>
+        )}
         <Resizable
           className="box"
           height={height}

@@ -1,40 +1,14 @@
-import { invoiceDownloadPDF } from '@/shared/service/b2b';
+import { InvoiceList } from '@/types/invoice';
+import { InvoicePdfGenerator } from '@/utils/pdf/InvoicePdfGenerator';
 
-const analyzePDFUrl = (url: string): Promise<string> =>
-  new Promise((resolve, reject) => {
-    fetch(url)
-      .then((res) => res.blob())
-      .then((response) => {
-        const blob = new Blob([response], { type: 'application/pdf' });
-
-        const invoicePDFUrl = window.URL.createObjectURL(blob);
-
-        resolve(invoicePDFUrl);
-      })
-      .catch((e) => {
-        reject(e);
-      });
-  });
-
-export const getInvoiceDownloadPDFUrl = async (
-  invoiceId: string,
-  isPayNow = false,
-): Promise<string> => {
-  const {
-    invoicePdf: { url },
-  } = await invoiceDownloadPDF(Number(invoiceId), isPayNow);
-
-  return url;
+export const getInvoicePdfUrl = (invoice: InvoiceList): string => {
+  const generator = new InvoicePdfGenerator(invoice);
+  generator.generate();
+  return generator.getBlobUrl();
 };
 
-export const handlePrintPDF = async (invoiceId: string, isPayNow = false): Promise<string> => {
-  let url = '';
-  try {
-    url = await getInvoiceDownloadPDFUrl(invoiceId, isPayNow);
-    const pdfUrl = await analyzePDFUrl(url);
-
-    return pdfUrl;
-  } catch (error) {
-    return url;
-  }
+export const downloadInvoicePdf = (invoice: InvoiceList): void => {
+  const generator = new InvoicePdfGenerator(invoice);
+  generator.generate();
+  generator.save();
 };

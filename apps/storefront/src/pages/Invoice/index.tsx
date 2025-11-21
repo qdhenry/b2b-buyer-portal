@@ -45,7 +45,7 @@ import InvoiceListType, {
   sortIdArr,
 } from './utils/config';
 import { formattingNumericValues } from './utils/payment';
-import { handlePrintPDF } from './utils/pdf';
+import { getInvoicePdfUrl } from './utils/pdf';
 import { InvoiceItemCard } from './InvoiceItemCard';
 
 interface FilterSearchProps {
@@ -279,13 +279,14 @@ function Invoice() {
     invoiceCompanyId: string,
   ) => {
     try {
-      const invoicePay =
-        Number(invoiceCompanyId) === Number(currentCompanyId)
-          ? invoicePayPermission
-          : invoiceSubPayPermission;
-      setIsRequestLoading(true);
-      const isPayNow = purchasabilityPermission && invoicePay && status !== 2;
-      const pdfUrl = await handlePrintPDF(id, isPayNow);
+      const invoiceNode = list.find((item) => item.node.id === id);
+
+      if (!invoiceNode) {
+        snackbar.error(b3Lang('invoice.pdfUrlResolutionError'));
+        return;
+      }
+
+      const pdfUrl = getInvoicePdfUrl(invoiceNode.node);
 
       if (!pdfUrl) {
         snackbar.error(b3Lang('invoice.pdfUrlResolutionError'));
@@ -300,8 +301,6 @@ function Invoice() {
       window.open(pdfUrl, '_blank', 'fullscreen=yes');
     } catch (err) {
       b2bLogger.error(err);
-    } finally {
-      setIsRequestLoading(false);
     }
   };
 
@@ -483,31 +482,37 @@ function Invoice() {
   const isB2BUser = useAppSelector(isB2BUserSelector);
   const [extraFieldsMap, setExtraFieldsMap] = useState<Record<string, ExtraField[]>>({});
 
-  const fetchList: GetRequestList<Partial<FilterSearchProps>, InvoiceList> = async (params) => {
-    const {
-      invoices: { edges, totalCount },
-    } = await getInvoiceList(params);
-
-    const invoicesList: InvoiceListNode[] = edges;
-
-    // STATLAB CUSTOMIZATION: Fetch extra fields for displayed order numbers
-    const orderNumbersToFetch = Array.from(new Set(invoicesList.map((item) => item.node.orderNumber).filter((id) => id)));
-    let extraFieldsMapData: Record<string, ExtraField[]> = {};
-    if (orderNumbersToFetch.length > 0) {
-      try {
-        extraFieldsMapData = await getOrdersExtraFields(orderNumbersToFetch, isB2BUser);
-      } catch (e) {
-        b2bLogger.error('Error fetching extra fields for invoices', e);
-      }
-    }
-    setExtraFieldsMap(extraFieldsMapData);
-
-    if (type === InvoiceListType.DETAIL && invoicesList.length) {
-      invoicesList.forEach((invoice: InvoiceListNode) => {
-        const item = invoice;
-        item.node.isCollapse = true;
-      });
-    }
+      const fetchList: GetRequestList<Partial<FilterSearchProps>, InvoiceList> = async (params) => {
+        const {
+          invoices: { edges, totalCount },
+        } = await getInvoiceList(params);
+  
+        const invoicesList: InvoiceListNode[] = edges;
+  
+        // STATLAB CUSTOMIZATION: Fetch extra fields for displayed order numbers
+        const orderNumbersToFetch = Array.from(new Set(invoicesList.map((item) => item.node.orderNumber).filter((id) => id)));
+        let extraFieldsMapData: Record<string, ExtraField[]> = {};
+        if (orderNumbersToFetch.length > 0) {
+          try {
+            extraFieldsMapData = await getOrdersExtraFields(orderNumbersToFetch, isB2BUser);
+          } catch (e) {
+            b2bLogger.error('Error fetching extra fields for invoices', e);
+          }
+        }
+        setExtraFieldsMap(extraFieldsMapData);
+  
+        // Merge extra fields into invoicesList
+        invoicesList.forEach((invoiceNode: InvoiceListNode) => {
+          if (invoiceNode.node.orderNumber && extraFieldsMapData[invoiceNode.node.orderNumber]) {
+            invoiceNode.node.extraFields = extraFieldsMapData[invoiceNode.node.orderNumber];
+          }
+        });
+  
+        if (type === InvoiceListType.DETAIL && invoicesList.length) {
+          invoicesList.forEach((invoice: InvoiceListNode) => {
+            const item = invoice;
+            item.node.isCollapse = true;
+          });    }
 
     invoicesList.forEach((invoiceNode: InvoiceListNode) => {
       const {
