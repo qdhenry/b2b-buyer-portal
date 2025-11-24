@@ -133,13 +133,18 @@ mutation EndMasquerade {
 	}
 }`;
 
-const userCompanyQl = (userId: number) => `{
+const userCompanyQl = (userId: number) => `
+query GetUserCompany {
 	userCompany(
 		userId: ${userId}
 	) {
 		companyName,
 		companyStatus,
 		id,
+		extraFields {
+			fieldName,
+			fieldValue,
+		},
 	}
 }`;
 

@@ -1,3 +1,5 @@
+import { ExtraField } from '@/pages/customizations';
+
 export interface CompanyInfoTypes {
   companyId: string;
   companyName: string;
@@ -8,6 +10,7 @@ export interface CompanyInfoTypes {
   companyZipCode: string;
   phoneNumber: string;
   bcId: string;
+  extraFields?: ExtraField[];
 }
 
 export interface InvoiceList {

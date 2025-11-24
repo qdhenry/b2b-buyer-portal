@@ -30,6 +30,8 @@ export {
   type ExtraField,
 } from './graphql/orders';
 
+export { getCompaniesExtraFields } from './graphql/companies';
+
 // Add more exports here as you create additional customizations
 // Examples for other pages:
 // export { useQuoteCustomizations } from './useQuoteCustomizations';

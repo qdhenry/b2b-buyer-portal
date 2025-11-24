@@ -236,12 +236,13 @@ export class InvoicePdfGenerator {
 
     // Columns
     const col1X = PAGE_MARGIN + 2;
-    const col2X = PAGE_MARGIN + 60;
-    const col3X = PAGE_MARGIN + 120;
+    const col2X = PAGE_MARGIN + 55;
+    const col3X = PAGE_MARGIN + 105;
 
     let y = startY + 5;
 
     this.doc.setFontSize(9);
+    console.log('THIS INVOICE', this);
 
     // Col 1: INVOICE INFORMATION
     this.doc.setFont('helvetica', 'bold');
@@ -277,7 +278,7 @@ export class InvoicePdfGenerator {
     this.doc.text(' Net 60 Days', col3X + 12, y); // Hardcoded placeholder for now
 
     // Col 4: SHIPPING DETAILS (Right aligned effectively, or 4th col)
-    const col4X = PAGE_MARGIN + 150;
+    const col4X = PAGE_MARGIN + 155;
     y = startY + 5;
     this.doc.setFont('helvetica', 'bold');
     this.doc.text('SHIPPING DETAILS', col4X, y);

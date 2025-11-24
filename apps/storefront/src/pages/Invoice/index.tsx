@@ -29,7 +29,12 @@ import { b2bPermissionsMap } from '@/utils/b3CheckPermissions/config';
 import b2bLogger from '@/utils/b3Logger';
 
 import B3Filter from '../../components/filter/B3Filter';
-import { ExtraField, getEpicorOrderId, getOrdersExtraFields } from '../customizations';
+import {
+  ExtraField,
+  getCompaniesExtraFields,
+  getEpicorOrderId,
+  getOrdersExtraFields,
+} from '../customizations';
 
 import B3Pulldown from './components/B3Pulldown';
 import InvoiceFooter from './components/InvoiceFooter';
@@ -91,6 +96,7 @@ function useData() {
   const { invoice: invoiceSubViewPermission } = useAppSelector(
     ({ company }) => company.pagesSubsidiariesPermission,
   );
+  const customerB2bId = useAppSelector(({ company }) => company.customer.b2bId);
 
   return {
     isAgenting,
@@ -100,6 +106,7 @@ function useData() {
     purchasabilityPermission,
     currentCompanyId,
     invoiceSubViewPermission,
+    customerB2bId,
   };
 }
 
@@ -115,6 +122,7 @@ function Invoice() {
     purchasabilityPermission,
     currentCompanyId,
     invoiceSubViewPermission,
+    customerB2bId,
   } = useData();
 
   const navigate = useNavigate();
@@ -483,32 +491,58 @@ function Invoice() {
   const [extraFieldsMap, setExtraFieldsMap] = useState<Record<string, ExtraField[]>>({});
 
       const fetchList: GetRequestList<Partial<FilterSearchProps>, InvoiceList> = async (params) => {
-        const {
-          invoices: { edges, totalCount },
-        } = await getInvoiceList(params);
-  
-        const invoicesList: InvoiceListNode[] = edges;
-  
-        // STATLAB CUSTOMIZATION: Fetch extra fields for displayed order numbers
-        const orderNumbersToFetch = Array.from(new Set(invoicesList.map((item) => item.node.orderNumber).filter((id) => id)));
-        let extraFieldsMapData: Record<string, ExtraField[]> = {};
-        if (orderNumbersToFetch.length > 0) {
-          try {
-            extraFieldsMapData = await getOrdersExtraFields(orderNumbersToFetch, isB2BUser);
-          } catch (e) {
-            b2bLogger.error('Error fetching extra fields for invoices', e);
-          }
-        }
-        setExtraFieldsMap(extraFieldsMapData);
-  
-        // Merge extra fields into invoicesList
-        invoicesList.forEach((invoiceNode: InvoiceListNode) => {
-          if (invoiceNode.node.orderNumber && extraFieldsMapData[invoiceNode.node.orderNumber]) {
-            invoiceNode.node.extraFields = extraFieldsMapData[invoiceNode.node.orderNumber];
-          }
-        });
-  
-        if (type === InvoiceListType.DETAIL && invoicesList.length) {
+    const {
+      invoices: { edges, totalCount },
+    } = await getInvoiceList(params);
+
+    const invoicesList: InvoiceListNode[] = edges;
+
+    // STATLAB CUSTOMIZATION: Fetch extra fields for displayed order numbers
+    const orderNumbersToFetch = Array.from(
+      new Set(invoicesList.map((item) => item.node.orderNumber).filter((id) => id)),
+    );
+    const companyIdsToFetch = Array.from(
+      new Set(invoicesList.map((item) => item.node.companyInfo.companyId).filter((id) => id)),
+    );
+
+    let extraFieldsMapData: Record<string, ExtraField[]> = {};
+    let companyExtraFieldsMapData: Record<string, ExtraField[]> = {};
+
+    if (orderNumbersToFetch.length > 0) {
+      try {
+        extraFieldsMapData = await getOrdersExtraFields(orderNumbersToFetch, isB2BUser);
+      } catch (e) {
+        b2bLogger.error('Error fetching extra fields for invoices', e);
+      }
+    }
+    setExtraFieldsMap(extraFieldsMapData);
+
+    if (companyIdsToFetch.length > 0) {
+      try {
+        companyExtraFieldsMapData = await getCompaniesExtraFields(
+          companyIdsToFetch,
+          customerB2bId,
+        );
+      } catch (e) {
+        b2bLogger.error('Error fetching extra fields for companies', e);
+      }
+    }
+
+    // Merge extra fields into invoicesList
+    invoicesList.forEach((invoiceNode: InvoiceListNode) => {
+      if (invoiceNode.node.orderNumber && extraFieldsMapData[invoiceNode.node.orderNumber]) {
+        invoiceNode.node.extraFields = extraFieldsMapData[invoiceNode.node.orderNumber];
+      }
+      if (
+        invoiceNode.node.companyInfo.companyId &&
+        companyExtraFieldsMapData[invoiceNode.node.companyInfo.companyId]
+      ) {
+        invoiceNode.node.companyInfo.extraFields =
+          companyExtraFieldsMapData[invoiceNode.node.companyInfo.companyId];
+      }
+    });
+
+    if (type === InvoiceListType.DETAIL && invoicesList.length) {
           invoicesList.forEach((invoice: InvoiceListNode) => {
             const item = invoice;
             item.node.isCollapse = true;
