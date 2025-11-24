@@ -239,10 +239,30 @@ export class InvoicePdfGenerator {
     const col2X = PAGE_MARGIN + 55;
     const col3X = PAGE_MARGIN + 105;
 
+    const companyExtraFields = this.invoice.companyInfo.extraFields || [];
+    console.log('companyExtraFields', companyExtraFields);
+    const getCompanyExtraFieldValue = (fieldName: string) => {
+      const field = companyExtraFields.find((item) => item.fieldName === fieldName);
+      const value = field?.fieldValue;
+      if (!value) return undefined;
+      const trimmed = value.trim();
+      return trimmed.length ? trimmed : undefined;
+    };
+
+    const customerIdValue =
+      getCompanyExtraFieldValue('Customer ID') ||
+      this.invoice.customerId ||
+      MISSING_DATA_PLACEHOLDER;
+    const customerNumberValue = getCompanyExtraFieldValue('Customer Number');
+    const salesRepNameValue =
+      getCompanyExtraFieldValue('Sales Rep Name') || MISSING_DATA_PLACEHOLDER;
+    const salesRepEmailValue =
+      getCompanyExtraFieldValue('Sales Rep Email') || MISSING_DATA_PLACEHOLDER;
+    const paymentTermsValue = getCompanyExtraFieldValue('Payment Terms') || 'Net 60 Days';
+
     let y = startY + 5;
 
     this.doc.setFontSize(9);
-    console.log('THIS INVOICE', this);
 
     // Col 1: INVOICE INFORMATION
     this.doc.setFont('helvetica', 'bold');
@@ -250,19 +270,22 @@ export class InvoicePdfGenerator {
     y += 5;
     this.doc.setFont('helvetica', 'normal');
     this.doc.text(`Invoice Number: ${this.invoice.invoiceNumber}`, col1X, y);
+    if (customerNumberValue) {
+      y += 5;
+      this.doc.text(`Customer Number: ${customerNumberValue}`, col1X, y);
+    }
 
     // Col 2: CUSTOMER ID & SALES REP
     y = startY + 5;
     this.doc.setFont('helvetica', 'bold');
-    this.doc.text(`CUSTOMER ID ${this.invoice.customerId || MISSING_DATA_PLACEHOLDER}`, col2X, y);
+    this.doc.text(`CUSTOMER ID ${customerIdValue}`, col2X, y);
     y += 8;
     this.doc.text('SALES REPRESENTATIVE', col2X, y);
     y += 4;
     this.doc.setFont('helvetica', 'normal');
-    // Missing Sales Rep Data
-    this.doc.text(MISSING_DATA_PLACEHOLDER, col2X, y);
+    this.doc.text(salesRepNameValue, col2X, y);
     y += 4;
-    this.doc.text(MISSING_DATA_PLACEHOLDER, col2X, y); // Email
+    this.doc.text(salesRepEmailValue, col2X, y); // Email
 
     // Col 3: DUE DATE, TERMS, INVOICED
     y = startY + 5;
@@ -275,7 +298,7 @@ export class InvoicePdfGenerator {
     this.doc.setFont('helvetica', 'bold');
     this.doc.text('TERMS', col3X, y);
     this.doc.setFont('helvetica', 'normal');
-    this.doc.text(' Net 60 Days', col3X + 12, y); // Hardcoded placeholder for now
+    this.doc.text(paymentTermsValue, col3X + 12, y);
 
     // Col 4: SHIPPING DETAILS (Right aligned effectively, or 4th col)
     const col4X = PAGE_MARGIN + 155;
