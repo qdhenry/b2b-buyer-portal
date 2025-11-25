@@ -1,6 +1,7 @@
-import { useContext, useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Alert, Box, ImageListItem } from '@mui/material';
+import { useContext, useEffect, useState } from 'react';
+import { useStore } from 'react-redux';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import b2bLogo from '@/assets/b2bLogo.png';
 import { B3Card } from '@/components';
@@ -14,7 +15,7 @@ import { defaultCreateAccountPanel } from '@/shared/customStyleButton/context/co
 import { GlobalContext } from '@/shared/global';
 import { getBCForcePasswordReset } from '@/shared/service/b2b';
 import { b2bLogin, bcLogin, customerLoginAPI } from '@/shared/service/bc';
-import { isLoggedInSelector, useAppDispatch, useAppSelector } from '@/store';
+import { isLoggedInSelector, useAppDispatch, useAppSelector, type RootState } from '@/store';
 import { setB2BToken } from '@/store/slices/company';
 import { CustomerRole, UserTypes } from '@/types';
 import { LoginFlagType } from '@/types/login';
@@ -26,8 +27,8 @@ import { getCurrentCustomerInfo } from '@/utils/loginInfo';
 
 import { type PageProps } from '../PageProps';
 
-import LoginWidget from './component/LoginWidget';
 import { CatalystLogin } from './CatalystLogin';
+import LoginWidget from './component/LoginWidget';
 import { isLoginFlagType, loginCheckout, LoginConfig, loginType } from './config';
 import LoginForm from './LoginForm';
 import LoginPanel from './LoginPanel';
@@ -46,6 +47,7 @@ const errorMap: Record<string, string> = {
 function Login(props: PageProps) {
   const { setOpenPage } = props;
   const storeDispatch = useAppDispatch();
+  const store = useStore();
   const logout = useLogout();
 
   const isLoggedIn = useAppSelector(isLoggedInSelector);
@@ -225,6 +227,35 @@ function Login(props: PageProps) {
           getForcePasswordReset(data.email);
         } else {
           const info = await getCurrentCustomerInfo(token);
+
+          // Verndale Customization: Push login event to GTM dataLayer
+          // Push login event to GTM dataLayer
+          try {
+            const state = store.getState() as RootState;
+            const { companyInfo, customer } = state.company;
+            const accountId = companyInfo.id || '';
+            const userId = customer.id || '';
+
+            if (accountId && localStorage.getItem('accountId') !== accountId) {
+              localStorage.setItem('accountId', accountId);
+            }
+            if (userId && localStorage.getItem('userId') !== userId.toString()) {
+              localStorage.setItem('userId', userId.toString());
+            }
+
+            if (window.dataLayer) {
+              window.dataLayer.push({
+                event: 'login',
+                user_details: {
+                  account_id: accountId,
+                  user_id: userId,
+                },
+              });
+            }
+          } catch (error) {
+            b2bLogger.error('Failed to push login event to dataLayer:', error);
+          }
+          // End Verndale Customization
 
           if (quoteDetailToCheckoutUrl) {
             navigate(quoteDetailToCheckoutUrl);
