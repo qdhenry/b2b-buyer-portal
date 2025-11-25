@@ -1,8 +1,8 @@
+import { Box, Typography } from '@mui/material';
+import Cookies from 'js-cookie';
 import { useEffect, useState } from 'react';
 import { FieldValues, useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
-import { Box, Typography } from '@mui/material';
-import Cookies from 'js-cookie';
 
 import { B3CustomForm } from '@/components';
 import B3Dialog from '@/components/B3Dialog';
@@ -23,6 +23,7 @@ import { createOrUpdateExistingCart } from '@/utils/cartUtils';
 import { EditableProductItem, OrderProductItem } from '../../../types';
 import getReturnFormFields from '../shared/config';
 
+import { trackEcommerceEvent } from '@/utils/gtmDataLayer';
 import CreateShoppingList from './CreateShoppingList';
 import OrderCheckboxProduct from './OrderCheckboxProduct';
 import OrderShoppingList from './OrderShoppingList';
@@ -202,6 +203,14 @@ export default function OrderDialog({
 
     try {
       const items: CustomFieldItems[] = [];
+      let dataLayerItems: {
+        productId: number;
+        variantId: number;
+        quantity: number;
+        optionList: CustomFieldItems;
+        productName: string;
+        basePrice: number;
+      }[] = [];
       const skus: string[] = [];
       editableProducts.forEach((product) => {
         if (checkedArr.includes(product.variant_id)) {
@@ -216,6 +225,26 @@ export default function OrderDialog({
             allOptions: product.product_options,
           });
 
+          // Verndale Customization: Add variant price to line item
+          const variantPrice =
+            variantInfoList?.length > 0 &&
+            variantInfoList.find(
+              (variant: CustomFieldItems) => Number(variant.variantId) === product.variant_id,
+            )?.calculatedPrice;
+
+          dataLayerItems.push({
+            productId: product.product_id,
+            variantId: product.variant_id,
+            quantity: parseInt(`${product.editQuantity}`, 10) || 1,
+            optionList: product.product_options.map((option) => ({
+              optionId: option.product_option_id,
+              optionValue: option.value,
+            })),
+            productName: product.name,
+            basePrice: variantPrice ? Number(variantPrice) : 0,
+          });
+          // End Verndale Customization
+
           skus.push(product.sku);
         }
       });
@@ -228,6 +257,7 @@ export default function OrderDialog({
         snackbar.error(b3Lang('purchasedProducts.error.fillCorrectQuantity'));
         return;
       }
+
       const res = await createOrUpdateExistingCart(items);
 
       const status = res && (res.data.cart.createCart || res.data.cart.addCartLineItems);
@@ -245,6 +275,28 @@ export default function OrderDialog({
           },
         });
         b3TriggerCartNumber();
+
+        // Verndale Customization: Track reorder event in GTM
+        await trackEcommerceEvent(
+          'add_to_cart',
+          dataLayerItems.map((item) => ({
+            node: {
+              ...item,
+              productId: item.productId.toString(),
+              optionList:
+                item.optionList?.length > 0
+                  ? item.optionList
+                      .map((option: { optionValue: string }) => option.optionValue)
+                      .join(',')
+                  : '',
+              productName: item.productName,
+              basePrice: item.basePrice,
+            },
+          })),
+          `Order Detail - ${orderId}`,
+          String(orderId),
+        );
+        // End Verndale Customization
       } else if (res.errors) {
         snackbar.error(res.errors[0].message);
       }
@@ -333,6 +385,49 @@ export default function OrderDialog({
           },
         },
       });
+
+      const dupItems = editableProducts.map((product) => {
+        const {
+          product_id: productId,
+          variant_id: variantId,
+          editQuantity,
+          product_options: productOptions,
+          base_price: basePrice,
+          name: productName,
+        } = product;
+
+        return {
+          productId: Number(productId),
+          variantId,
+          quantity: Number(editQuantity),
+          optionList: productOptions.map((option) => {
+            const { product_option_id: optionId, value: optionValue } = option;
+
+            return {
+              optionId: `attribute[${optionId}]`,
+              optionValue,
+            };
+          }),
+          productName: productName,
+          basePrice: basePrice ? Number(basePrice) : 0,
+        };
+      });
+
+      // Verndale Customization: Track add to shopping list event in GTM
+      await trackEcommerceEvent(
+        'add_to_shopping_list',
+        dupItems.map((item) => ({
+          node: {
+            productId: item.productId.toString(),
+            optionList: item.optionList.map((option) => option.optionValue).join(','),
+            productName: item.productName,
+            basePrice: item.basePrice,
+          },
+        })),
+        `Shopping List - ${id}`,
+        String(id),
+      );
+      // End Verndale Customization
 
       setOpenShoppingList(false);
     } finally {

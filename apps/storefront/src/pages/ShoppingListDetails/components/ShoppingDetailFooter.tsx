@@ -1,8 +1,8 @@
-import { useContext, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { ArrowDropDown, Delete } from '@mui/icons-material';
 import { Box, Grid, Menu, MenuItem, Typography } from '@mui/material';
 import Cookies from 'js-cookie';
+import { useContext, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { v1 as uuid } from 'uuid';
 
 import CustomButton from '@/components/button/CustomButton';
@@ -13,7 +13,7 @@ import { useB3Lang } from '@/lib/lang';
 import { GlobalContext } from '@/shared/global';
 import { getVariantInfoBySkus, searchProducts } from '@/shared/service/b2b/graphql/product';
 import { deleteCart, getCart } from '@/shared/service/bc/graphql/cart';
-import { rolePermissionSelector, useAppSelector } from '@/store';
+import { rolePermissionSelector, useAppSelector, useAppStore } from '@/store';
 import { ShoppingListStatus } from '@/types/shoppingList';
 import { currencyFormat, snackbar } from '@/utils';
 import b2bLogger from '@/utils/b3Logger';
@@ -29,6 +29,7 @@ import {
 } from '@/utils/b3Product/shared/config';
 import b3TriggerCartNumber from '@/utils/b3TriggerCartNumber';
 import { createOrUpdateExistingCart, deleteCartData, updateCart } from '@/utils/cartUtils';
+import { trackEcommerceEvent } from '@/utils/gtmDataLayer';
 import { validateProducts } from '@/utils/validateProducts';
 
 interface ShoppingDetailFooterProps {
@@ -88,6 +89,7 @@ function ShoppingDetailFooter(props: ShoppingDetailFooterProps) {
   const [isMobile] = useMobile();
   const b3Lang = useB3Lang();
   const navigate = useNavigate();
+  const store = useAppStore();
   const featureFlags = useFeatureFlags();
 
   const {
@@ -309,6 +311,16 @@ function ShoppingDetailFooter(props: ShoppingDetailFooterProps) {
       if (res && res.errors) {
         snackbar.error(res.errors[0].message);
       } else if (validateFailureArr.length === 0) {
+        // Verndale Customization: Pass store instance to trackEcommerceEvent
+        // Track add_to_cart event in GTM
+        await trackEcommerceEvent(
+          'add_to_cart',
+          validateSuccessArr,
+          shoppingListInfo?.name || 'Shopping List',
+          String(shoppingListInfo?.id || ''),
+          store,
+        );
+
         shouldRedirectCheckout();
       }
     }

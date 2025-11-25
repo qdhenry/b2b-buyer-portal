@@ -1,6 +1,6 @@
+import { Box, Grid, Typography } from '@mui/material';
 import { Fragment, KeyboardEventHandler, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { Box, Grid, Typography } from '@mui/material';
 
 import CustomButton from '@/components/button/CustomButton';
 import { B3ControlTextField } from '@/components/form/B3ControlTextField';
@@ -10,7 +10,7 @@ import { useBlockPendingAccountViewPrice } from '@/hooks/useBlockPendingAccountV
 import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 import { useB3Lang } from '@/lib/lang';
 import { getVariantInfoBySkus } from '@/shared/service/b2b';
-import { useAppSelector } from '@/store';
+import { store, useAppSelector } from '@/store';
 import { snackbar } from '@/utils';
 import b3TriggerCartNumber from '@/utils/b3TriggerCartNumber';
 import { createOrUpdateExistingCart } from '@/utils/cartUtils';
@@ -20,9 +20,10 @@ import {
   validateProducts,
 } from '@/utils/validateProducts';
 
-import { SimpleObject } from '../../../types';
+import { ShoppingListAddProductOption, SimpleObject } from '../../../types';
 import { getCartProductInfo } from '../utils';
 
+import { trackEcommerceEvent } from '@/utils/gtmDataLayer';
 import {
   CatalogProduct,
   filterInputSkusForNotFoundProducts,
@@ -391,6 +392,8 @@ export default function QuickAdd() {
 
         const variantInfoList = await getVariantList(skus);
 
+        let dupItems: CustomFieldItems[] = [];
+
         if (featureFlags['B2B-3318.move_stock_and_backorder_validation_to_backend']) {
           const result = await handleBackendValidation(variantInfoList, skuQuantityMap, skus);
           const { productItems, passSku, notFoundSkus, validationErrors } = result;
@@ -420,6 +423,15 @@ export default function QuickAdd() {
           }
 
           if (productItems.length > 0) {
+            dupItems = productItems.map((item) => ({
+              ...item,
+              productId: item.productId.toString(),
+              optionList: item.optionList
+                .map((option: ShoppingListAddProductOption) => option.optionValue)
+                .join(','),
+              productName: item.productName,
+              basePrice: item.calculatedPrice ? Number(item.calculatedPrice) : 0,
+            }));
             await addProductsToCart(productItems);
             clearInputValue(formData, passSku);
           }
@@ -432,10 +444,32 @@ export default function QuickAdd() {
           );
 
           if (productItems.length > 0) {
+            dupItems = productItems.map((item) => ({
+              ...item,
+              productId: item.productId.toString(),
+              optionList:
+                item.optionList && item.optionList.length > 0
+                  ? item.optionList
+                      .map((option: ShoppingListAddProductOption) => option.optionValue)
+                      .join(',')
+                  : '',
+              productName: item.productName,
+              basePrice: item.calculatedPrice ? Number(item.calculatedPrice) : 0,
+            }));
             await addProductsToCart(productItems);
             clearInputValue(formData, passSku);
           }
         }
+
+        // Verndale Customization: Track add to cart event in GTM
+        await trackEcommerceEvent(
+          'add_to_cart',
+          dupItems.map((item) => ({ node: { ...item, productId: item.productId.toString() } })),
+          'Quick Order',
+          '',
+          store,
+        );
+        // End Verndale Customization
       } catch (e) {
         if (e instanceof Error) {
           snackbar.error(e.message);
