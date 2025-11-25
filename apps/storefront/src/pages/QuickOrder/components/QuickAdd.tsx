@@ -20,7 +20,7 @@ import {
   validateProducts,
 } from '@/utils/validateProducts';
 
-import { ShoppingListAddProductOption, SimpleObject } from '../../../types';
+import { SimpleObject } from '../../../types';
 import { getCartProductInfo } from '../utils';
 
 import { trackEcommerceEvent } from '@/utils/gtmDataLayer';
@@ -392,7 +392,14 @@ export default function QuickAdd() {
 
         const variantInfoList = await getVariantList(skus);
 
-        let dupItems: CustomFieldItems[] = [];
+        let dataLayerItems: {
+          productId: number;
+          variantId: number;
+          quantity: number;
+          optionList: CustomFieldItems;
+          productName: string;
+          basePrice: number;
+        }[] = [];
 
         if (featureFlags['B2B-3318.move_stock_and_backorder_validation_to_backend']) {
           const result = await handleBackendValidation(variantInfoList, skuQuantityMap, skus);
@@ -423,12 +430,11 @@ export default function QuickAdd() {
           }
 
           if (productItems.length > 0) {
-            dupItems = productItems.map((item) => ({
-              ...item,
-              productId: item.productId.toString(),
-              optionList: item.optionList
-                .map((option: ShoppingListAddProductOption) => option.optionValue)
-                .join(','),
+            dataLayerItems = productItems.map((item) => ({
+              productId: Number(item.productId),
+              variantId: Number(item.variantId),
+              quantity: Number(item.quantity),
+              optionList: item.optionList ?? [],
               productName: item.productName,
               basePrice: item.calculatedPrice ? Number(item.calculatedPrice) : 0,
             }));
@@ -444,18 +450,16 @@ export default function QuickAdd() {
           );
 
           if (productItems.length > 0) {
-            dupItems = productItems.map((item) => ({
+            dataLayerItems = productItems.map((item) => ({
               ...item,
-              productId: item.productId.toString(),
-              optionList:
-                item.optionList && item.optionList.length > 0
-                  ? item.optionList
-                      .map((option: ShoppingListAddProductOption) => option.optionValue)
-                      .join(',')
-                  : '',
+              productId: Number(item.productId),
+              variantId: Number(item.variantId),
+              quantity: Number(item.quantity),
+              optionList: item.optionList ?? [],
               productName: item.productName,
               basePrice: item.calculatedPrice ? Number(item.calculatedPrice) : 0,
             }));
+
             await addProductsToCart(productItems);
             clearInputValue(formData, passSku);
           }
@@ -464,7 +468,20 @@ export default function QuickAdd() {
         // Verndale Customization: Track add to cart event in GTM
         await trackEcommerceEvent(
           'add_to_cart',
-          dupItems.map((item) => ({ node: { ...item, productId: item.productId.toString() } })),
+          dataLayerItems.map((item) => ({
+            node: {
+              ...item,
+              productId: item.productId.toString(),
+              optionList:
+                item.optionList?.length > 0
+                  ? item.optionList
+                      .map((option: { optionValue: string }) => option.optionValue)
+                      .join(',')
+                  : '',
+              productName: item.productName,
+              basePrice: item.basePrice,
+            },
+          })),
           'Quick Order',
           '',
           store,

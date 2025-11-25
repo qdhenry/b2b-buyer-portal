@@ -386,7 +386,7 @@ export default function OrderDialog({
         },
       });
 
-      const dupItems = editableProducts.map((product) => {
+      const dataLayerItems = editableProducts.map((product) => {
         const {
           product_id: productId,
           variant_id: variantId,
@@ -416,7 +416,7 @@ export default function OrderDialog({
       // Verndale Customization: Track add to shopping list event in GTM
       await trackEcommerceEvent(
         'add_to_shopping_list',
-        dupItems.map((item) => ({
+        dataLayerItems.map((item) => ({
           node: {
             productId: item.productId.toString(),
             optionList: item.optionList.map((option) => option.optionValue).join(','),
