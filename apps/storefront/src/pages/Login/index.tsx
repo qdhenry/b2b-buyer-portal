@@ -1,6 +1,5 @@
 import { Alert, Box, ImageListItem } from '@mui/material';
 import { useContext, useEffect, useState } from 'react';
-import { useStore } from 'react-redux';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import b2bLogo from '@/assets/b2bLogo.png';
@@ -15,7 +14,7 @@ import { defaultCreateAccountPanel } from '@/shared/customStyleButton/context/co
 import { GlobalContext } from '@/shared/global';
 import { getBCForcePasswordReset } from '@/shared/service/b2b';
 import { b2bLogin, bcLogin, customerLoginAPI } from '@/shared/service/bc';
-import { isLoggedInSelector, useAppDispatch, useAppSelector, type RootState } from '@/store';
+import { isLoggedInSelector, useAppDispatch, useAppSelector, useAppStore } from '@/store';
 import { setB2BToken } from '@/store/slices/company';
 import { CustomerRole, UserTypes } from '@/types';
 import { LoginFlagType } from '@/types/login';
@@ -23,6 +22,7 @@ import { channelId, loginJump, platform, snackbar, storeHash } from '@/utils';
 import { b2bJumpPath } from '@/utils/b3CheckPermissions/b2bPermissionPath';
 import b2bLogger from '@/utils/b3Logger';
 import { getAssetUrl } from '@/utils/getAssetUrl';
+import { getGTMUserDetails } from '@/utils/gtmDataLayer';
 import { getCurrentCustomerInfo } from '@/utils/loginInfo';
 
 import { type PageProps } from '../PageProps';
@@ -47,7 +47,7 @@ const errorMap: Record<string, string> = {
 function Login(props: PageProps) {
   const { setOpenPage } = props;
   const storeDispatch = useAppDispatch();
-  const store = useStore();
+  const store = useAppStore();
   const logout = useLogout();
 
   const isLoggedIn = useAppSelector(isLoggedInSelector);
@@ -231,25 +231,13 @@ function Login(props: PageProps) {
           // Verndale Customization: Push login event to GTM dataLayer
           // Push login event to GTM dataLayer
           try {
-            const state = store.getState() as RootState;
-            const { companyInfo, customer } = state.company;
-            const accountId = companyInfo.id || '';
-            const userId = customer.id || '';
+            const userDetails = getGTMUserDetails(store);
 
-            if (accountId && localStorage.getItem('accountId') !== accountId) {
-              localStorage.setItem('accountId', accountId);
-            }
-            if (userId && localStorage.getItem('userId') !== userId.toString()) {
-              localStorage.setItem('userId', userId.toString());
-            }
-
+            // Push login event to dataLayer
             if (window.dataLayer) {
               window.dataLayer.push({
                 event: 'login',
-                user_details: {
-                  account_id: accountId,
-                  user_id: userId,
-                },
+                user_details: userDetails,
               });
             }
           } catch (error) {
