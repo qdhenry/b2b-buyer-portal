@@ -238,46 +238,7 @@ export default function RegisteredAccount({ handleNext }: RegisteredAccountProps
           <TipContent>{errorTips}</TipContent>
         </Alert>
       )}
-      <FormControl
-        sx={{
-          '& h4': {
-            color: customColor,
-          },
-        }}
-      >
-        <InformationFourLabels>
-          {b3Lang('register.registeredAccount.accountType')}
-        </InformationFourLabels>
-        <RadioGroup
-          aria-labelledby="demo-row-radio-buttons-group-label"
-          name="row-radio-buttons-group"
-          value={accountType}
-          onChange={handleChange}
-          sx={{
-            '& .MuiTypography-root.MuiTypography-body1.MuiFormControlLabel-label': {
-              color: b3HexToRgb(customColor, 0.87),
-            },
-            '& .MuiButtonBase-root.MuiRadio-root.MuiRadio-colorPrimary:not(.Mui-checked)': {
-              color: b3HexToRgb(customColor, 0.6),
-            },
-          }}
-        >
-          {accountLoginRegistration.b2b && (
-            <FormControlLabel
-              value="1"
-              control={<Radio />}
-              label={b3Lang('register.registeredAccount.businessAccount')}
-            />
-          )}
-          {accountLoginRegistration.b2c && (
-            <FormControlLabel
-              value="2"
-              control={<Radio />}
-              label={b3Lang('register.registeredAccount.personalAccount')}
-            />
-          )}
-        </RadioGroup>
-      </FormControl>
+      {/* STATLAB CUSTOMIZATION: Account type selection removed - only business accounts allowed */}
       <Box
         sx={{
           '& h4': {
