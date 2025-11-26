@@ -283,8 +283,8 @@ function Invoice() {
 
   const handleViewInvoice = async (
     id: string,
-    status: string | number,
-    invoiceCompanyId: string,
+    _status: string | number,
+    _invoiceCompanyId: string,
   ) => {
     try {
       const invoiceNode = list.find((item) => item.node.id === id);

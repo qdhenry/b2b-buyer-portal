@@ -7,9 +7,9 @@ import {
   renderWithProviders,
   screen,
   startMockServer,
+  userEvent,
   waitForElementToBeRemoved,
 } from 'tests/test-utils';
-import { when } from 'vitest-when';
 
 import { CustomerRole } from '@/types';
 

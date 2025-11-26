@@ -1,7 +1,6 @@
 import { useParams } from 'react-router-dom';
 import {
   buildCompanyStateWith,
-  builder,
   buildStoreInfoStateWith,
   graphql,
   HttpResponse,

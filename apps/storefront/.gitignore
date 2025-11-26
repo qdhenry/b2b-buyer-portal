@@ -25,3 +25,4 @@ stats*
 *.sln
 *.sw?
 .tsbuildinfo
+.vercel

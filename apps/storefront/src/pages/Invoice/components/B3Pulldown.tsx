@@ -33,7 +33,7 @@ interface B3PulldownProps {
 
 function B3Pulldown({
   row,
-  setIsRequestLoading,
+  setIsRequestLoading: _setIsRequestLoading,
   setInvoiceId,
   handleOpenHistoryModal,
   isCurrentCompany,

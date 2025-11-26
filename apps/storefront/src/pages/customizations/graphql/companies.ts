@@ -30,7 +30,7 @@ export const getCompaniesExtraFields = async (
       return {};
     }
 
-    const normalizedExtraFields = (company.extraFields || []).map((field) => ({
+    const normalizedExtraFields = (company.extraFields || []).map((field: { fieldName?: string; fieldValue?: string }) => ({
       fieldName: field?.fieldName ?? '',
       fieldValue: field?.fieldValue ?? '',
     }));

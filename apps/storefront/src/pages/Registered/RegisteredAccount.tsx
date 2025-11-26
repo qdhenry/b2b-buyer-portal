@@ -1,6 +1,6 @@
-import { ChangeEvent, MouseEvent, useContext, useState } from 'react';
+import { MouseEvent, useContext, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { Alert, Box, FormControl, FormControlLabel, Radio, RadioGroup } from '@mui/material';
+import { Alert, Box } from '@mui/material';
 
 import { B3CustomForm } from '@/components';
 import { b3HexToRgb, getContrastColor } from '@/components/outSideComponents/utils/b3CustomStyles';
@@ -31,7 +31,6 @@ export default function RegisteredAccount({ handleNext }: RegisteredAccountProps
 
   const {
     state: {
-      accountLoginRegistration,
       portalStyle: { backgroundColor = '#FEF9F5' },
     },
   } = useContext(CustomStyleContext);
@@ -87,15 +86,6 @@ export default function RegisteredAccount({ handleNext }: RegisteredAccountProps
       type: 'loading',
       payload: {
         isLoading: isShow,
-      },
-    });
-  };
-
-  const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
-    dispatch({
-      type: 'accountType',
-      payload: {
-        accountType: event.target.value,
       },
     });
   };

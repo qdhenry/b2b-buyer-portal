@@ -7,7 +7,6 @@ import {
   faker,
   getUnixTime,
   graphql,
-  http,
   HttpResponse,
   renderWithProviders,
   screen,

@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf';
-import autoTable, { UserOptions } from 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 
 import { InvoiceList } from '@/types/invoice';
 import { displayFormat } from '@/utils';
@@ -14,7 +14,6 @@ const PAGE_MARGIN = 10; // mm
 const CONTENT_WIDTH = 190; // 210 - 20
 const COLOR_BLACK = '#000000';
 const COLOR_GRAY_BG = '#E6E6E6';
-const COLOR_LIGHT_BLUE = '#D9E1F2';
 const COLOR_WHITE = '#FFFFFF';
 
 // Placeholder for missing data
@@ -39,13 +38,6 @@ export class InvoicePdfGenerator {
     this.doc.addPage();
     this.drawPage2();
 
-    // Page numbering
-    const pageCount = this.doc.internal.pages.length - 1; // jspdf adds one empty page at start? no.
-    // Actually internal.pages includes the object.
-    // We can just loop and add "Page X of Y" if needed at the end,
-    // but the reference puts it in specific headers/footers.
-    // I'll stick to manual placement per page for now as structure differs.
-
     return this.doc;
   }
 
@@ -54,7 +46,7 @@ export class InvoicePdfGenerator {
   }
 
   public getBlobUrl(): string {
-    return this.doc.output('bloburl');
+    return this.doc.output('bloburl') as unknown as string;
   }
 
   // ==========================================

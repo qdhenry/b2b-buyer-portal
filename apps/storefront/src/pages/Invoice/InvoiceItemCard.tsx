@@ -8,7 +8,7 @@ import { useB3Lang } from '@/lib/lang';
 import { InvoiceList, InvoiceListNode } from '@/types/invoice';
 import { currencyFormat, displayFormat } from '@/utils';
 
-import { ExtraField, getEpicorOrderId, OrderData } from '../customizations';
+import { getEpicorOrderId } from '../customizations';
 
 import B3Pulldown from './components/B3Pulldown';
 import InvoiceStatus from './components/InvoiceStatus';
@@ -286,7 +286,7 @@ export function InvoiceItemCard(props: InvoiceItemCardProps) {
                 wordBreak: 'break-all',
               }}
             >
-              {list?.render ? list.render() : item[list.key]}
+              {list?.render ? list.render() : (item as unknown as Record<string, unknown>)[list.key as string]}
             </Box>
           </Box>
         ))}

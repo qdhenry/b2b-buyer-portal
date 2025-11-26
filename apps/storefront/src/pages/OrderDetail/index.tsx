@@ -36,7 +36,7 @@ interface LocationState {
   isCompanyOrder: boolean;
 }
 
-interface OrderDetailParams {
+interface OrderDetailParams extends Record<string, string | undefined> {
   bcOrderId: string;
   epicorOrderId?: string;
 }
