@@ -240,7 +240,7 @@ function Order({ isCompanyOrder = false }: OrderProps) {
     setAllTotal(totalCount);
 
     // STATLAB CUSTOMIZATION: Fetch extra fields for displayed orders
-    const idsToFetch = edges.map((item) => item.node.orderId).filter((id) => id);
+    const idsToFetch = edges.map((item: any) => item.node.orderId).filter((id: any) => id);
     let extraFieldsMapData: Record<string, ExtraField[]> = {};
     if (idsToFetch.length > 0) {
       try {
@@ -262,16 +262,21 @@ function Order({ isCompanyOrder = false }: OrderProps) {
   const navigate = useNavigate();
 
   const goToDetail = (item: ListItem, index: number) => {
-    // STATLAB CUSTOMIZATION: Use epicoreOrderId for URL if available
+    // STATLAB CUSTOMIZATION: Dual-parameter URL with bcOrderId first (for API lookups)
+    // and epicorOrderId second (for user-friendly URL display)
     const itemWithExtraFields = {
       ...item,
       extraFields: extraFieldsMap[item.orderId] || item.extraFields,
     };
-    const displayId = getEpicorOrderId(itemWithExtraFields) || item.orderId;
+    const epicorId = getEpicorOrderId(itemWithExtraFields);
 
-    navigate(`/orderDetail/${displayId}`, {
+    // Build URL: /orderDetail/{bcOrderId}/{epicorOrderId?}
+    const url = epicorId
+      ? `/orderDetail/${item.orderId}/${epicorId}`
+      : `/orderDetail/${item.orderId}`;
+
+    navigate(url, {
       state: {
-        id: item.orderId,
         currentIndex: index,
         searchParams: {
           ...filterData,

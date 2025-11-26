@@ -20,13 +20,7 @@ import { isB2BUserSelector, useAppSelector } from '@/store';
 import { AddressConfigItem, CustomerRole, OrderProductItem, OrderStatusItem } from '@/types';
 import b2bLogger from '@/utils/b3Logger';
 
-import {
-  getB2BAllOrders,
-  getBCAllOrders,
-  getEpicorOrderId,
-  type OrderData,
-  useOrderCustomizations,
-} from '../customizations';
+import { type OrderData, useOrderCustomizations } from '../customizations';
 import OrderStatus from '../order/components/OrderStatus';
 import { orderStatusTranslationVariables } from '../order/shared/getOrderStatus';
 
@@ -40,7 +34,11 @@ import convertB2BOrderDetails from './shared/B2BOrderData';
 
 interface LocationState {
   isCompanyOrder: boolean;
-  id?: string;
+}
+
+interface OrderDetailParams {
+  bcOrderId: string;
+  epicorOrderId?: string;
 }
 
 function OrderDetail() {
@@ -59,7 +57,7 @@ function OrderDetail() {
       : Number(companyInfoId);
   const currentCompanyId = Number(selectCompanyHierarchyId) || companyId;
 
-  const params = useParams();
+  const { bcOrderId, epicorOrderId } = useParams<OrderDetailParams>();
 
   const navigate = useNavigate();
 
@@ -104,14 +102,12 @@ function OrderDetail() {
   // STATLAB CUSTOMIZATION: Initialize custom order data handling
   const { getDisplayOrderId } = useOrderCustomizations({ order: orderData });
 
+  // STATLAB CUSTOMIZATION: bcOrderId is always available in URL for reliable API lookups
   useEffect(() => {
-    const stateId = (location.state as LocationState)?.id;
-    if (stateId) {
-      setOrderId(stateId);
-    } else {
-      setOrderId(params.id || '');
+    if (bcOrderId) {
+      setOrderId(bcOrderId);
     }
-  }, [params, location.state]);
+  }, [bcOrderId]);
 
   const goToOrders = () => {
     navigate((location.state as LocationState).isCompanyOrder ? '/company-orders' : '/orders');
@@ -120,36 +116,8 @@ function OrderDetail() {
   useEffect(() => {
     if (orderId) {
       const getOrderDetails = async () => {
-        let id = parseInt(orderId, 10);
-
-        // STATLAB CUSTOMIZATION: Resolve Epicor ID to BC Order ID
-        // If we have a state ID that matches current orderId, we trust it's the BC ID.
-        // Otherwise (direct URL access), we try to resolve the ID which might be an Epicor ID.
-        const stateId = (location.state as LocationState)?.id;
-        const isStateIdAuth = stateId && String(stateId) === String(orderId);
-
-        if (!isStateIdAuth) {
-          setIsRequestLoading(true);
-          try {
-            const fetcher = isB2BUser ? getB2BAllOrders : getBCAllOrders;
-
-            const { edges } = await fetcher({
-              q: orderId,
-              first: 50,
-              offset: 0,
-              orderBy: 'orderId-desc',
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            } as any);
-
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const match = edges.find((edge: any) => getEpicorOrderId(edge.node) === orderId);
-            if (match?.node?.orderId) {
-              id = parseInt(match.node.orderId, 10);
-            }
-          } catch (e) {
-            b2bLogger.error(e);
-          }
-        }
+        // STATLAB CUSTOMIZATION: orderId is always the BC Order ID from URL params
+        const id = parseInt(orderId, 10);
 
         if (!id) {
           setIsRequestLoading(false);
@@ -325,10 +293,14 @@ function OrderDetail() {
               }}
             >
               {/* STATLAB CUSTOMIZATION: Display Epicor Order ID instead of BC Order ID */}
-              {b3Lang('orderDetail.orderId', { orderId: getDisplayOrderId(orderId) })}
-              {b3Lang('orderDetail.purchaseOrderNumber', {
-                purchaseOrderNumber: poNumber ?? '',
+              {/* Use epicorOrderId from URL params immediately to prevent flash */}
+              {b3Lang('orderDetail.orderId', {
+                orderId: epicorOrderId || getDisplayOrderId(orderId),
               })}
+              {poNumber &&
+                b3Lang('orderDetail.purchaseOrderNumber', {
+                  purchaseOrderNumber: poNumber,
+                })}
             </Typography>
             <OrderStatus code={status} text={getOrderStatusLabel(status)} />
           </Grid>
