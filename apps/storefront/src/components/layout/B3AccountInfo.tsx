@@ -1,6 +1,6 @@
-import { Box } from '@mui/material';
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Box } from '@mui/material';
 
 import { useMobile } from '@/hooks/useMobile';
 import { useB3Lang } from '@/lib/lang';

@@ -1,8 +1,8 @@
-import { Box, Typography } from '@mui/material';
-import Cookies from 'js-cookie';
 import { useEffect, useState } from 'react';
 import { FieldValues, useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
+import { Box, Typography } from '@mui/material';
+import Cookies from 'js-cookie';
 
 import { B3CustomForm } from '@/components';
 import B3Dialog from '@/components/B3Dialog';
@@ -19,11 +19,11 @@ import { BigCommerceStorefrontAPIBaseURL, snackbar } from '@/utils';
 import b2bLogger from '@/utils/b3Logger';
 import b3TriggerCartNumber from '@/utils/b3TriggerCartNumber';
 import { createOrUpdateExistingCart } from '@/utils/cartUtils';
+import { trackEcommerceEvent } from '@/utils/gtmDataLayer';
 
 import { EditableProductItem, OrderProductItem } from '../../../types';
 import getReturnFormFields from '../shared/config';
 
-import { trackEcommerceEvent } from '@/utils/gtmDataLayer';
 import CreateShoppingList from './CreateShoppingList';
 import OrderCheckboxProduct from './OrderCheckboxProduct';
 import OrderShoppingList from './OrderShoppingList';
@@ -203,7 +203,7 @@ export default function OrderDialog({
 
     try {
       const items: CustomFieldItems[] = [];
-      let dataLayerItems: {
+      const dataLayerItems: {
         productId: number;
         variantId: number;
         quantity: number;
@@ -408,7 +408,7 @@ export default function OrderDialog({
               optionValue,
             };
           }),
-          productName: productName,
+          productName,
           basePrice: basePrice ? Number(basePrice) : 0,
         };
       });

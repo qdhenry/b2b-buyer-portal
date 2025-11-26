@@ -1,8 +1,8 @@
+import { Dispatch, SetStateAction, useContext, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ArrowDropDown } from '@mui/icons-material';
 import { Box, Grid, Menu, MenuItem, SxProps, Typography, useMediaQuery } from '@mui/material';
 import uniq from 'lodash-es/uniq';
-import { Dispatch, SetStateAction, useContext, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { v1 as uuid } from 'uuid';
 
 import CustomButton from '@/components/button/CustomButton';
@@ -34,9 +34,9 @@ import {
 import { conversionProductsList } from '@/utils/b3Product/shared/config';
 import b3TriggerCartNumber from '@/utils/b3TriggerCartNumber';
 import { createOrUpdateExistingCart } from '@/utils/cartUtils';
+import { trackEcommerceEvent } from '@/utils/gtmDataLayer';
 import { validateProducts } from '@/utils/validateProducts';
 
-import { trackEcommerceEvent } from '@/utils/gtmDataLayer';
 import CreateShoppingList from '../../OrderDetail/components/CreateShoppingList';
 import OrderShoppingList from '../../OrderDetail/components/OrderShoppingList';
 import { addCartProductToVerify, CheckedProduct } from '../utils';
@@ -474,7 +474,7 @@ function QuickOrderFooter(props: QuickOrderFooterProps) {
       });
 
       const items: CustomFieldItems = [];
-      let dataLayerItems: {
+      const dataLayerItems: {
         productId: number;
         variantId: number;
         quantity: number;

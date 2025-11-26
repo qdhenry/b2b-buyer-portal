@@ -1,6 +1,6 @@
-import { Alert, Box, ImageListItem } from '@mui/material';
 import { useContext, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Alert, Box, ImageListItem } from '@mui/material';
 
 import b2bLogo from '@/assets/b2bLogo.png';
 import { B3Card } from '@/components';
@@ -27,8 +27,8 @@ import { getCurrentCustomerInfo } from '@/utils/loginInfo';
 
 import { type PageProps } from '../PageProps';
 
-import { CatalystLogin } from './CatalystLogin';
 import LoginWidget from './component/LoginWidget';
+import { CatalystLogin } from './CatalystLogin';
 import { isLoginFlagType, loginCheckout, LoginConfig, loginType } from './config';
 import LoginForm from './LoginForm';
 import LoginPanel from './LoginPanel';
