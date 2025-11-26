@@ -1,10 +1,8 @@
 import type { AppStore, RootState } from '@/store';
+// Import deprecated store as fallback
+import { store as deprecatedStore } from '@/store';
 import { getActiveCurrencyInfo } from '@/utils';
 import b2bLogger from '@/utils/b3Logger';
-
-// Import deprecated store as fallback
-// eslint-disable-next-line import/no-deprecated
-import { store as deprecatedStore } from '@/store';
 
 export interface GTMProductItem {
   node: {
@@ -185,7 +183,7 @@ export async function fetchProductCategories(
             : [...breadcrumbNames, primaryCategory.name];
 
         const categoryFields: Record<string, string> = {};
-        for (let i = 0; i < fullPath.length && i < 5; i++) {
+        for (let i = 0; i < fullPath.length && i < 5; i += 1) {
           const key = i === 0 ? 'item_category' : `item_category${i + 1}`;
           categoryFields[key] = fullPath[i].trim();
         }

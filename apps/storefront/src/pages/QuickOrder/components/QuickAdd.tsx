@@ -1,6 +1,6 @@
-import { Box, Grid, Typography } from '@mui/material';
 import { Fragment, KeyboardEventHandler, useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { Box, Grid, Typography } from '@mui/material';
 
 import CustomButton from '@/components/button/CustomButton';
 import { B3ControlTextField } from '@/components/form/B3ControlTextField';
@@ -14,6 +14,7 @@ import { store, useAppSelector } from '@/store';
 import { snackbar } from '@/utils';
 import b3TriggerCartNumber from '@/utils/b3TriggerCartNumber';
 import { createOrUpdateExistingCart } from '@/utils/cartUtils';
+import { trackEcommerceEvent } from '@/utils/gtmDataLayer';
 import {
   ValidatedProductError,
   ValidatedProductWarning,
@@ -23,7 +24,6 @@ import {
 import { SimpleObject } from '../../../types';
 import { getCartProductInfo } from '../utils';
 
-import { trackEcommerceEvent } from '@/utils/gtmDataLayer';
 import {
   CatalogProduct,
   filterInputSkusForNotFoundProducts,
