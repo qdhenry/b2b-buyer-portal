@@ -158,9 +158,23 @@ export const getOrdersCreatedByUser = (companyId: number) =>
     query: getCreatedByUser(companyId),
   });
 
+// B2B API has a hard limit of 10 items per batch query
+const EXTRA_FIELDS_BATCH_SIZE = 10;
+
 /**
- * Fetches extra fields for a list of order IDs by batching them into a single GraphQL query.
- * Uses aliases to fetch multiple orders in one request from the detail API.
+ * Splits an array into chunks of the specified size.
+ */
+function chunkArray<T>(array: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < array.length; i += size) {
+    chunks.push(array.slice(i, i + size));
+  }
+  return chunks;
+}
+
+/**
+ * Fetches extra fields for a list of order IDs by batching them into GraphQL queries.
+ * Uses aliases to fetch multiple orders per request, with chunking to respect API limits.
  *
  * @param ids Array of order IDs (strings or numbers)
  * @param isB2BUser Boolean indicating if the user is a B2B user (affects query field name)
@@ -175,36 +189,47 @@ export const getOrdersExtraFields = async (
   const queryField = isB2BUser ? 'order' : 'customerOrder';
   const operationName = isB2BUser ? 'GetOrdersDetails' : 'GetCustomerOrdersDetails';
 
-  const queryParts = ids.map((id) => {
-    const safeId = String(id).replace(/[^a-zA-Z0-9]/g, '_');
-    return `
-      order_${safeId}: ${queryField}(id: ${id}) {
-        id
-        extraFields
+  // Chunk IDs to respect API limit of 10 items per query
+  const chunks = chunkArray(ids, EXTRA_FIELDS_BATCH_SIZE);
+
+  // Execute all chunk queries in parallel
+  const chunkPromises = chunks.map(async (chunkIds, chunkIndex) => {
+    const queryParts = chunkIds.map((id) => {
+      const safeId = String(id).replace(/[^a-zA-Z0-9]/g, '_');
+      return `
+        order_${safeId}: ${queryField}(id: ${id}) {
+          id
+          extraFields
+        }
+      `;
+    });
+
+    const query = `
+      query ${operationName}_${chunkIndex} {
+        ${queryParts.join('\n')}
       }
     `;
+
+    return B3Request.graphqlB2B({ query });
   });
 
-  const query = `
-    query ${operationName} {
-      ${queryParts.join('\n')}
-    }
-  `;
-
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const response: any = await B3Request.graphqlB2B({ query });
+    const responses = await Promise.all(chunkPromises);
 
+    // Merge all responses into single result
     const result: Record<string, ExtraField[]> = {};
 
-    Object.keys(response).forEach((alias) => {
-      const orderData = response[alias];
-      // The id returned in orderData might be an integer or string, but our map keys are strings (original IDs)
-      // We use the alias to map back to the original ID since we know the order
-      const originalId = alias.replace('order_', '');
-      if (orderData && orderData.extraFields) {
-        result[originalId] = orderData.extraFields;
-      }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    responses.forEach((response: any) => {
+      Object.keys(response).forEach((alias) => {
+        const orderData = response[alias];
+        // The id returned in orderData might be an integer or string, but our map keys are strings (original IDs)
+        // We use the alias to map back to the original ID since we know the order
+        const originalId = alias.replace('order_', '');
+        if (orderData?.extraFields) {
+          result[originalId] = orderData.extraFields;
+        }
+      });
     });
 
     return result;
