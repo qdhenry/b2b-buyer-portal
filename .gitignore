@@ -38,3 +38,4 @@ slack-message.json
 
 # generated graphql POC schema
 supergraph.graphql
+.vercel
