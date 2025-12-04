@@ -20,6 +20,7 @@ export type { OrderData, UseOrderCustomizationsProps, UseOrderCustomizationsRetu
 // Export custom order queries
 export {
   getB2BAllOrders,
+  getB2BAllOrdersREST,
   getBCAllOrders,
   getOrderStatusType,
   getBcOrderStatusType,
