@@ -15,7 +15,7 @@ import b2bLogger from '@/utils/b3Logger';
 
 import {
   type ExtraField,
-  getB2BAllOrders,
+  getB2BAllOrdersREST,
   getBCAllOrders,
   getBcOrderStatusType,
   getEpicorOrderId,
@@ -229,32 +229,44 @@ function Order({ isCompanyOrder = false }: OrderProps) {
     createdBy,
     ...params
   }: Partial<FilterSearchProps>): Promise<{ edges: ListItem[]; totalCount: number }> => {
-    const { edges = [], totalCount } = isB2BUser
-      ? await getB2BAllOrders({
-          ...params,
-          email: getEmail(createdBy),
-          createdBy: getName(createdBy),
-        })
-      : await getBCAllOrders(params);
-
-    setAllTotal(totalCount);
-
-    // STATLAB CUSTOMIZATION: Fetch extra fields for displayed orders
-    const idsToFetch = edges.map((item: any) => item.node.orderId).filter((id: any) => id);
+    let edges: any[] = [];
+    let totalCount = 0;
     let extraFieldsMapData: Record<string, ExtraField[]> = {};
-    if (idsToFetch.length > 0) {
-      try {
-        extraFieldsMapData = await getOrdersExtraFields(idsToFetch, isB2BUser);
-      } catch (e) {
-        b2bLogger.error('Error fetching extra fields in fetchList', e);
+
+    if (isB2BUser) {
+      // Use REST API for B2B users - extraFields included in single call
+      const result = await getB2BAllOrdersREST({
+        ...params,
+        email: getEmail(createdBy),
+        createdBy: getName(createdBy),
+      });
+      edges = result.edges;
+      totalCount = result.totalCount;
+      extraFieldsMapData = result.extraFieldsMap;
+    } else {
+      // Keep GraphQL for BC customers
+      const result = await getBCAllOrders(params);
+      edges = result.edges || [];
+      totalCount = result.totalCount;
+
+      // BC customers still need separate extraFields fetch
+      const idsToFetch = edges.map((item: any) => item.node.orderId).filter((id: any) => id);
+      if (idsToFetch.length > 0) {
+        try {
+          extraFieldsMapData = await getOrdersExtraFields(idsToFetch, false);
+        } catch (e) {
+          b2bLogger.error('Error fetching extra fields in fetchList', e);
+        }
       }
     }
 
-    // Update extraFieldsMap state after all fetches are done
+    setAllTotal(totalCount);
     setExtraFieldsMap(extraFieldsMapData);
 
     return {
-      edges: edges.map((row: PossibleNodeWrapper<object>) => ('node' in row ? row.node : row)),
+      edges: edges.map((row: PossibleNodeWrapper<object>) =>
+        'node' in row ? row.node : row,
+      ) as ListItem[],
       totalCount,
     };
   };
@@ -324,10 +336,21 @@ function Order({ isCompanyOrder = false }: OrderProps) {
     {
       key: 'totalIncTax',
       title: b3Lang('orders.grandTotal'),
-      render: ({ money, totalIncTax }) =>
-        money
-          ? ordersCurrencyFormat(JSON.parse(JSON.parse(money)), totalIncTax)
-          : currencyFormat(totalIncTax),
+      render: ({ money, totalIncTax }) => {
+        console.log('Money', money);
+        console.log('totalIncTax', totalIncTax);
+        if (!money) return currencyFormat(totalIncTax);
+        try {
+          let parsed = JSON.parse(money);
+          // Handle double-encoded JSON (legacy GraphQL format)
+          if (typeof parsed === 'string') {
+            parsed = JSON.parse(parsed);
+          }
+          return ordersCurrencyFormat(parsed, totalIncTax);
+        } catch {
+          return currencyFormat(totalIncTax);
+        }
+      },
       align: 'right',
       width: '8%',
       isSortable: true,

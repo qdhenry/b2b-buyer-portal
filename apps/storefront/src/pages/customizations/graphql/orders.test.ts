@@ -1,18 +1,23 @@
 import { vi } from 'vitest';
 import B3Request from '@/shared/service/request/b3Fetch';
-import { 
-  getOrdersExtraFields, 
-  getB2BAllOrders, 
+import {
+  getOrdersExtraFields,
+  getB2BAllOrders,
   getBCAllOrders,
   getOrderStatusType,
   getBcOrderStatusType,
-  getOrdersCreatedByUser
+  getOrdersCreatedByUser,
+  getCompanyInfo,
+  getCompaniesInfo,
+  clearCompanyCache,
+  getB2BAllOrdersREST,
 } from './orders';
 
 // Mock B3Request
 vi.mock('@/shared/service/request/b3Fetch', () => ({
   default: {
     graphqlB2B: vi.fn(),
+    get: vi.fn(),
   },
 }));
 
@@ -282,15 +287,430 @@ describe('graphql/orders', () => {
   describe('getOrdersCreatedByUser', () => {
     it('fetches orders created by user', async () => {
       (B3Request.graphqlB2B as any).mockResolvedValue({ createdByUser: { results: [] } });
-      
+
       await getOrdersCreatedByUser(123);
-      
+
       expect(B3Request.graphqlB2B).toHaveBeenCalledWith(expect.objectContaining({
         query: expect.stringContaining('createdByUser'),
       }));
-      
+
       const queryArg = (B3Request.graphqlB2B as any).mock.calls[0][0].query;
       expect(queryArg).toContain('companyId: 123');
+    });
+  });
+
+  describe('getCompanyInfo', () => {
+    beforeEach(() => {
+      clearCompanyCache();
+    });
+
+    it('fetches company info from API', async () => {
+      (B3Request.get as any).mockResolvedValue({ companyName: 'Test Company' });
+
+      const result = await getCompanyInfo(123);
+
+      expect(B3Request.get).toHaveBeenCalledWith('/api/v2/companies/123', 'B2BRest');
+      expect(result).toEqual({ companyId: 123, companyName: 'Test Company' });
+    });
+
+    it('returns cached result on subsequent calls', async () => {
+      (B3Request.get as any).mockResolvedValue({ companyName: 'Cached Co' });
+
+      await getCompanyInfo(456);
+      await getCompanyInfo(456);
+
+      expect(B3Request.get).toHaveBeenCalledTimes(1);
+    });
+
+    it('handles API errors gracefully', async () => {
+      (B3Request.get as any).mockRejectedValue(new Error('Network error'));
+
+      const result = await getCompanyInfo(999);
+
+      expect(result).toBeNull();
+    });
+
+    it('handles empty company name', async () => {
+      (B3Request.get as any).mockResolvedValue({ companyName: '' });
+
+      const result = await getCompanyInfo(100);
+
+      expect(result).toEqual({ companyId: 100, companyName: '' });
+    });
+  });
+
+  describe('getCompaniesInfo', () => {
+    beforeEach(() => {
+      clearCompanyCache();
+    });
+
+    it('fetches multiple companies in parallel', async () => {
+      (B3Request.get as any)
+        .mockResolvedValueOnce({ companyName: 'Company A' })
+        .mockResolvedValueOnce({ companyName: 'Company B' });
+
+      const result = await getCompaniesInfo([1, 2]);
+
+      expect(B3Request.get).toHaveBeenCalledTimes(2);
+      expect(result.get(1)).toBe('Company A');
+      expect(result.get(2)).toBe('Company B');
+    });
+
+    it('deduplicates company IDs', async () => {
+      (B3Request.get as any).mockResolvedValue({ companyName: 'Deduped' });
+
+      await getCompaniesInfo([1, 1, 1]);
+
+      expect(B3Request.get).toHaveBeenCalledTimes(1);
+    });
+
+    it('uses cache for already fetched companies', async () => {
+      (B3Request.get as any).mockResolvedValue({ companyName: 'Cached' });
+
+      await getCompanyInfo(10);
+      (B3Request.get as any).mockClear();
+
+      const result = await getCompaniesInfo([10, 20]);
+
+      expect(B3Request.get).toHaveBeenCalledTimes(1);
+      expect(result.get(10)).toBe('Cached');
+    });
+  });
+
+  describe('clearCompanyCache', () => {
+    it('clears the cache so subsequent calls fetch from API', async () => {
+      (B3Request.get as any).mockResolvedValue({ companyName: 'First' });
+      await getCompanyInfo(1);
+
+      (B3Request.get as any).mockClear();
+      (B3Request.get as any).mockResolvedValue({ companyName: 'Second' });
+
+      clearCompanyCache();
+      const result = await getCompanyInfo(1);
+
+      expect(B3Request.get).toHaveBeenCalledTimes(1);
+      expect(result?.companyName).toBe('Second');
+    });
+  });
+
+  describe('getB2BAllOrdersREST', () => {
+    beforeEach(() => {
+      clearCompanyCache();
+    });
+
+    it('fetches orders with showExtra=true', async () => {
+      const mockResponse = {
+        code: 200,
+        data: {
+          list: [],
+          paginator: { totalCount: 0, offset: 0, limit: 10 },
+        },
+        message: '',
+      };
+      (B3Request.get as any).mockResolvedValue(mockResponse);
+
+      await getB2BAllOrdersREST({ first: 10, offset: 0, orderBy: '-createdAt' });
+
+      expect(B3Request.get).toHaveBeenCalledWith(
+        '/api/v2/orders',
+        'B2BRest',
+        expect.objectContaining({ showExtra: true, limit: 10, offset: 0 })
+      );
+    });
+
+    it('maps REST response to GraphQL-like structure', async () => {
+      const mockOrder = {
+        orderId: 12345,
+        companyName: 'Test Company',
+        totalIncTax: 100.0,
+        poNumber: 'PO-001',
+        orderStatus: 'Pending',
+        firstName: 'John',
+        lastName: 'Doe',
+        money: {
+          currency_token: '$',
+          decimal_places: 2,
+          currency_location: 'left',
+          decimal_token: '.',
+          thousands_token: ',',
+        },
+        extraFields: [{ fieldName: 'epicoreOrderId', fieldValue: 'EPI-123' }],
+        createdAt: '1699900000',
+      };
+      const mockResponse = {
+        code: 200,
+        data: {
+          list: [mockOrder],
+          paginator: { totalCount: 1, offset: 0, limit: 10 },
+        },
+        message: '',
+      };
+      (B3Request.get as any).mockResolvedValue(mockResponse);
+
+      const result = await getB2BAllOrdersREST({ first: 10, offset: 0, orderBy: '-createdAt' });
+
+      expect(result.totalCount).toBe(1);
+      expect(result.edges).toHaveLength(1);
+      expect(result.edges[0].node.orderId).toBe('12345');
+      expect(result.edges[0].node.totalIncTax).toBe(100.0);
+      expect(result.edges[0].node.poNumber).toBe('PO-001');
+      expect(result.edges[0].node.firstName).toBe('John');
+      expect(result.edges[0].node.lastName).toBe('Doe');
+      expect(result.extraFieldsMap['12345']).toEqual([
+        { fieldName: 'epicoreOrderId', fieldValue: 'EPI-123' },
+      ]);
+    });
+
+    it('uses companyName directly from response (no separate fetch)', async () => {
+      const mockOrder = {
+        orderId: 999,
+        companyName: 'Acme Corp',
+        totalIncTax: 50,
+        poNumber: '',
+        orderStatus: 'Shipped',
+        firstName: 'Jane',
+        lastName: 'Smith',
+        money: {
+          currency_token: '$',
+          decimal_places: 2,
+          currency_location: 'left',
+          decimal_token: '.',
+          thousands_token: ',',
+        },
+        extraFields: [],
+        createdAt: '1699900000',
+      };
+      const mockResponse = {
+        code: 200,
+        data: {
+          list: [mockOrder],
+          paginator: { totalCount: 1, offset: 0, limit: 10 },
+        },
+        message: '',
+      };
+
+      (B3Request.get as any).mockResolvedValue(mockResponse);
+
+      const result = await getB2BAllOrdersREST({ first: 10, offset: 0, orderBy: '-createdAt' });
+
+      // Company name should come directly from response - only 1 API call
+      expect(B3Request.get).toHaveBeenCalledTimes(1);
+      expect(result.edges[0].node.companyInfo?.companyName).toBe('Acme Corp');
+    });
+
+    it('handles errors gracefully', async () => {
+      (B3Request.get as any).mockRejectedValue(new Error('API error'));
+
+      const result = await getB2BAllOrdersREST({ first: 10, offset: 0, orderBy: '-createdAt' });
+
+      expect(result).toEqual({ edges: [], totalCount: 0, extraFieldsMap: {} });
+    });
+
+    it('includes optional filters in request', async () => {
+      const mockResponse = {
+        code: 200,
+        data: {
+          list: [],
+          paginator: { totalCount: 0, offset: 0, limit: 10 },
+        },
+        message: '',
+      };
+      (B3Request.get as any).mockResolvedValue(mockResponse);
+
+      await getB2BAllOrdersREST({
+        first: 10,
+        offset: 0,
+        orderBy: '-createdAt',
+        q: 'search term',
+        statusCode: 'Pending',
+        beginDateAt: '2024-01-01',
+        endDateAt: '2024-12-31',
+        companyIds: [1, 2, 3],
+      });
+
+      expect(B3Request.get).toHaveBeenCalledWith(
+        '/api/v2/orders',
+        'B2BRest',
+        expect.objectContaining({
+          search: 'search term',
+          status: 'Pending',
+          beginDateAt: '2024-01-01',
+          endDateAt: '2024-12-31',
+          companyIds: '1,2,3',
+        })
+      );
+    });
+
+    describe('money formatting for ordersCurrencyFormat compatibility', () => {
+      it('formats money with snake_case properties required by ordersCurrencyFormat', async () => {
+        const mockOrder = {
+          orderId: 123,
+          companyName: 'Test Co',
+          totalIncTax: 99.99,
+          poNumber: '',
+          orderStatus: 'Pending',
+          firstName: 'Test',
+          lastName: 'User',
+          money: {
+            currency_location: 'left',
+            currency_token: '$',
+            decimal_token: '.',
+            decimal_places: 2,
+            thousands_token: ',',
+          },
+          extraFields: [],
+          createdAt: '1699900000',
+        };
+        const mockResponse = {
+          code: 200,
+          data: {
+            list: [mockOrder],
+            paginator: { totalCount: 1, offset: 0, limit: 10 },
+          },
+          message: '',
+        };
+        (B3Request.get as any).mockResolvedValue(mockResponse);
+
+        const result = await getB2BAllOrdersREST({ first: 10, offset: 0, orderBy: '-createdAt' });
+
+        // Parse the money JSON and verify snake_case properties
+        const moneyJson = result.edges[0].node.money;
+        expect(moneyJson).toBeDefined();
+
+        const parsedMoney = JSON.parse(moneyJson!);
+
+        // Verify snake_case properties (required by ordersCurrencyFormat)
+        expect(parsedMoney).toHaveProperty('currency_location', 'left');
+        expect(parsedMoney).toHaveProperty('currency_token', '$');
+        expect(parsedMoney).toHaveProperty('decimal_token', '.');
+        expect(parsedMoney).toHaveProperty('decimal_places', 2);
+        expect(parsedMoney).toHaveProperty('thousands_token', ',');
+
+        // Verify camelCase properties are NOT present (would break ordersCurrencyFormat)
+        expect(parsedMoney).not.toHaveProperty('currencyLocation');
+        expect(parsedMoney).not.toHaveProperty('currencyToken');
+        expect(parsedMoney).not.toHaveProperty('decimalToken');
+        expect(parsedMoney).not.toHaveProperty('decimalPlaces');
+        expect(parsedMoney).not.toHaveProperty('thousandsToken');
+      });
+
+      it('preserves currency_location "right" for currencies like EUR', async () => {
+        const mockOrder = {
+          orderId: 456,
+          companyName: 'Euro Corp',
+          totalIncTax: 150.50,
+          poNumber: '',
+          orderStatus: 'Complete',
+          firstName: 'Euro',
+          lastName: 'User',
+          money: {
+            currency_location: 'right',
+            currency_token: '€',
+            decimal_token: ',',
+            decimal_places: 2,
+            thousands_token: '.',
+          },
+          extraFields: [],
+          createdAt: '1699900000',
+        };
+        const mockResponse = {
+          code: 200,
+          data: {
+            list: [mockOrder],
+            paginator: { totalCount: 1, offset: 0, limit: 10 },
+          },
+          message: '',
+        };
+        (B3Request.get as any).mockResolvedValue(mockResponse);
+
+        const result = await getB2BAllOrdersREST({ first: 10, offset: 0, orderBy: '-createdAt' });
+
+        const parsedMoney = JSON.parse(result.edges[0].node.money!);
+
+        expect(parsedMoney.currency_location).toBe('right');
+        expect(parsedMoney.currency_token).toBe('€');
+        expect(parsedMoney.decimal_token).toBe(',');
+        expect(parsedMoney.thousands_token).toBe('.');
+      });
+
+      it('handles zero decimal places for currencies like JPY', async () => {
+        const mockOrder = {
+          orderId: 789,
+          companyName: 'Japan Corp',
+          totalIncTax: 15000,
+          poNumber: '',
+          orderStatus: 'Pending',
+          firstName: 'Yen',
+          lastName: 'User',
+          money: {
+            currency_location: 'left',
+            currency_token: '¥',
+            decimal_token: '.',
+            decimal_places: 0,
+            thousands_token: ',',
+          },
+          extraFields: [],
+          createdAt: '1699900000',
+        };
+        const mockResponse = {
+          code: 200,
+          data: {
+            list: [mockOrder],
+            paginator: { totalCount: 1, offset: 0, limit: 10 },
+          },
+          message: '',
+        };
+        (B3Request.get as any).mockResolvedValue(mockResponse);
+
+        const result = await getB2BAllOrdersREST({ first: 10, offset: 0, orderBy: '-createdAt' });
+
+        const parsedMoney = JSON.parse(result.edges[0].node.money!);
+
+        expect(parsedMoney.decimal_places).toBe(0);
+        expect(parsedMoney.currency_token).toBe('¥');
+      });
+
+      it('money JSON is single-encoded (not double-encoded)', async () => {
+        const mockOrder = {
+          orderId: 111,
+          companyName: 'Test',
+          totalIncTax: 50,
+          poNumber: '',
+          orderStatus: 'Pending',
+          firstName: 'A',
+          lastName: 'B',
+          money: {
+            currency_location: 'left',
+            currency_token: '$',
+            decimal_token: '.',
+            decimal_places: 2,
+            thousands_token: ',',
+          },
+          extraFields: [],
+          createdAt: '1699900000',
+        };
+        const mockResponse = {
+          code: 200,
+          data: {
+            list: [mockOrder],
+            paginator: { totalCount: 1, offset: 0, limit: 10 },
+          },
+          message: '',
+        };
+        (B3Request.get as any).mockResolvedValue(mockResponse);
+
+        const result = await getB2BAllOrdersREST({ first: 10, offset: 0, orderBy: '-createdAt' });
+
+        const moneyJson = result.edges[0].node.money!;
+
+        // First parse should give an object, not another string
+        const firstParse = JSON.parse(moneyJson);
+        expect(typeof firstParse).toBe('object');
+        expect(typeof firstParse).not.toBe('string');
+
+        // Verify it's a valid money object
+        expect(firstParse.currency_token).toBe('$');
+      });
     });
   });
 });

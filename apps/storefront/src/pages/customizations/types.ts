@@ -59,6 +59,53 @@ export interface UseOrderCustomizationsReturn {
    */
 }
 
+// REST API Response Types for Orders
+export interface MoneyFormat {
+  currencyLocation: string;
+  currencyToken: string;
+  decimalToken: string;
+  decimalPlaces: number;
+  thousandsToken: string;
+}
+
+export interface RESTOrderItem {
+  id: number;              // B2B internal ID
+  bcOrderId: string;       // BigCommerce order ID
+  totalIncTax: number;
+  poNumber: string | null;
+  status: string;
+  customStatus: string;
+  cartId: string | null;
+  items: number;
+  usdIncTax: number;
+  companyId: number;
+  currencyCode: string;
+  money: MoneyFormat;
+  statusCode: number;
+  isArchived: boolean;
+  channelId: number;
+  channelName: string;
+  extraFields: ExtraField[];  // Already parsed array
+  extraInfo: object | null;   // Object (not string)
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface RESTOrdersPagination {
+  totalCount: number;
+  offset: number;
+  limit: number;
+}
+
+export interface RESTOrdersResponse {
+  code: number;
+  data: RESTOrderItem[];
+  meta: {
+    pagination: RESTOrdersPagination;
+    message: string;
+  };
+}
+
 /**
  * Add more custom types here as you expand the customizations
  *

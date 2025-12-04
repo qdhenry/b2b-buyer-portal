@@ -238,3 +238,236 @@ export const getOrdersExtraFields = async (
     return {};
   }
 };
+
+// Company info types for REST API
+export interface CompanyInfo {
+  companyId: number;
+  companyName: string;
+}
+
+// Cache for company names to avoid redundant API calls
+const companyCache = new Map<number, string>();
+
+/**
+ * Fetches a single company's information by ID.
+ * Results are cached to avoid redundant API calls.
+ */
+export const getCompanyInfo = async (companyId: number): Promise<CompanyInfo | null> => {
+  // Check cache first
+  if (companyCache.has(companyId)) {
+    return { companyId, companyName: companyCache.get(companyId)! };
+  }
+
+  try {
+    const response = await B3Request.get(`/api/v2/companies/${companyId}`, 'B2BRest');
+
+    const companyName = response?.companyName || '';
+    companyCache.set(companyId, companyName);
+    return { companyId, companyName };
+  } catch (error) {
+    b2bLogger.error(`Failed to fetch company ${companyId}:`, error);
+    return null;
+  }
+};
+
+/**
+ * Batch fetches multiple company names in parallel.
+ * Uses caching and deduplication for efficiency.
+ */
+export const getCompaniesInfo = async (companyIds: number[]): Promise<Map<number, string>> => {
+  const uniqueIds = Array.from(new Set(companyIds));
+  const uncachedIds = uniqueIds.filter((id) => !companyCache.has(id));
+
+  // Fetch uncached companies in parallel
+  if (uncachedIds.length > 0) {
+    await Promise.all(uncachedIds.map((id) => getCompanyInfo(id)));
+  }
+
+  // Return map of all requested companies
+  const result = new Map<number, string>();
+  uniqueIds.forEach((id) => {
+    result.set(id, companyCache.get(id) || '');
+  });
+  return result;
+};
+
+/**
+ * Clears the company cache. Useful for testing or when company data may have changed.
+ */
+export const clearCompanyCache = (): void => {
+  companyCache.clear();
+};
+
+// REST API Response Types - based on actual API response
+interface RESTOrderItem {
+  orderId: number; // BigCommerce order ID
+  companyName: string; // Already included - no separate fetch needed!
+  createdAt: string; // Unix timestamp as string
+  updatedAt: string;
+  isInvoiceOrder: number;
+  orderStatus: string; // e.g., "Awaiting Fulfillment"
+  customOrderStatus: string;
+  statusCode: number;
+  totalIncTax: number;
+  currencyCode: string;
+  money: {
+    currency_location: string; // snake_case
+    currency_token: string;
+    decimal_token: string;
+    decimal_places: number;
+    thousands_token: string;
+  };
+  firstName: string;
+  lastName: string;
+  poNumber: string;
+  referenceNumber: string;
+  channelName: string;
+  extraInt1: number | null;
+  extraInt2: number | null;
+  extraInt3: number | null;
+  extraInt4: number | null;
+  extraInt5: number | null;
+  extraStr1: string | null;
+  extraStr2: string | null;
+  extraStr3: string | null;
+  extraStr4: string | null;
+  extraStr5: string | null;
+  extraText: string | null;
+  extraInfo: {
+    addressExtraFields?: {
+      billingAddressExtraFields?: ExtraField[];
+      shippingAddressExtraFields?: ExtraField[];
+    };
+  } | null;
+  extraFields: ExtraField[];
+}
+
+interface RESTOrdersResponseData {
+  list: RESTOrderItem[];
+  paginator: {
+    totalCount: number;
+    offset: number;
+    limit: number;
+  };
+}
+
+interface RESTOrdersResponse {
+  code: number;
+  data: RESTOrdersResponseData;
+  message: string;
+}
+
+/**
+ * Maps GraphQL orderBy values to REST API orderBy format.
+ * REST API only accepts 'ASC' or 'DESC' (defaults to DESC).
+ * Prefix '-' in GraphQL means descending order.
+ */
+const mapOrderByToREST = (graphqlOrderBy: string): string => {
+  // GraphQL uses '-fieldName' for descending, 'fieldName' for ascending
+  return graphqlOrderBy.startsWith('-') ? 'DESC' : 'ASC';
+};
+
+/**
+ * Fetches B2B orders using the REST API with showExtra=true.
+ * This is more efficient than GraphQL as it returns extraFields in a single call.
+ * Company names are already included in the response - no separate fetch needed!
+ *
+ * @param data - Filter and pagination parameters
+ * @returns Orders in GraphQL-like structure plus extraFieldsMap
+ */
+export const getB2BAllOrdersREST = async (
+  data: CustomFieldItems,
+): Promise<{
+  edges: CompanyOrderNode[];
+  totalCount: number;
+  extraFieldsMap: Record<string, ExtraField[]>;
+}> => {
+  // Build query parameters
+  const params: Record<string, string | number | boolean> = {
+    limit: data.first,
+    offset: data.offset,
+    showExtra: true,
+  };
+
+  // Map orderBy to REST API format (only ASC or DESC allowed)
+  if (data.orderBy) {
+    params.sort = mapOrderByToREST(data.orderBy);
+  }
+
+  // Add optional filters only if they have values
+  if (data.q) params.search = data.q;
+  if (data.statusCode) params.status = data.statusCode;
+  if (data.beginDateAt) params.beginDateAt = data.beginDateAt;
+  if (data.endDateAt) params.endDateAt = data.endDateAt;
+  if (data.companyName) params.companyName = data.companyName;
+  if (data.createdBy) params.createdBy = data.createdBy;
+  if (data.email) params.email = data.email;
+  if (data.isShowMy) params.isShowMy = data.isShowMy;
+  if (data.companyIds?.length) params.companyIds = data.companyIds.join(',');
+
+  try {
+    const response: RESTOrdersResponse = await B3Request.get('/api/v2/orders', 'B2BRest', params);
+
+    // Defensive check for response structure
+    if (!response?.data?.list) {
+      b2bLogger.error('Unexpected REST API response structure:', response);
+      return {
+        edges: [],
+        totalCount: 0,
+        extraFieldsMap: {},
+      };
+    }
+
+    // Build extraFieldsMap from response
+    const extraFieldsMap: Record<string, ExtraField[]> = {};
+
+    // Map REST response to GraphQL-like structure
+    // Note: companyName is already in the response - no separate fetch needed!
+    const edges: CompanyOrderNode[] = response.data.list.map((order) => {
+      const orderIdStr = String(order.orderId);
+
+      // Store extraFields in the map using orderId as key
+      extraFieldsMap[orderIdStr] = order.extraFields || [];
+
+      // Keep snake_case format - ordersCurrencyFormat expects snake_case properties
+      const moneyFormatted = {
+        currency_location: order.money.currency_location,
+        currency_token: order.money.currency_token,
+        decimal_token: order.money.decimal_token,
+        decimal_places: order.money.decimal_places,
+        thousands_token: order.money.thousands_token,
+      };
+
+      return {
+        node: {
+          orderId: orderIdStr,
+          createdAt: Number(order.createdAt),
+          totalIncTax: order.totalIncTax,
+          money: JSON.stringify(moneyFormatted),
+          poNumber: order.poNumber || undefined,
+          status: order.orderStatus,
+          firstName: order.firstName,
+          lastName: order.lastName,
+          companyInfo: {
+            companyName: order.companyName,
+          },
+          extraInfo: JSON.stringify(order.extraFields),
+        },
+      };
+    });
+
+    return {
+      edges,
+      totalCount: response.data.paginator.totalCount,
+      extraFieldsMap,
+    };
+  } catch (error) {
+    b2bLogger.error('Failed to fetch orders via REST API:', error);
+    // Return empty result on error
+    return {
+      edges: [],
+      totalCount: 0,
+      extraFieldsMap: {},
+    };
+  }
+};

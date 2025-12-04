@@ -162,10 +162,14 @@ const B3Request = {
   get: function get<T, Y>(url: string, type: RequestTypeKeys, data?: T, config?: Y): Promise<any> {
     if (data) {
       const params = queryParse(data);
-      return request(`${url}?${params}`, {
-        method: 'GET',
-        ...config,
-      });
+      return request(
+        `${url}?${params}`,
+        {
+          method: 'GET',
+          ...config,
+        },
+        type,
+      );
     }
     return request(
       url,
