@@ -76,6 +76,7 @@ export default defineConfig(({ mode }): UserConfig & Pick<ViteUserConfig, 'test'
       },
     },
     build: {
+      manifest: true,
       minify: true,
       sourcemap: true,
       rollupOptions: {
@@ -90,6 +91,7 @@ export default defineConfig(({ mode }): UserConfig & Pick<ViteUserConfig, 'test'
             }
             return '[name].[hash].js';
           },
+          experimentalMinChunkSize: 10_000,
           manualChunks: {
             reactVendor: ['react', 'react-dom'],
             intl: ['react-intl'],

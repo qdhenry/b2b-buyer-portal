@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { FieldValues, useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 
-import { B3CustomForm } from '@/components';
+import { B3CustomForm } from '@/components/B3CustomForm';
 import B3Dialog from '@/components/B3Dialog';
 import { CART_URL } from '@/constants';
 import { useMobile } from '@/hooks/useMobile';
@@ -15,9 +15,10 @@ import {
   getVariantInfoBySkus,
 } from '@/shared/service/b2b';
 import { isB2BUserSelector, useAppSelector } from '@/store';
-import { BigCommerceStorefrontAPIBaseURL, snackbar } from '@/utils';
 import b2bLogger from '@/utils/b3Logger';
+import { snackbar } from '@/utils/b3Tip';
 import b3TriggerCartNumber from '@/utils/b3TriggerCartNumber';
+import { BigCommerceStorefrontAPIBaseURL } from '@/utils/basicConfig';
 import { createOrUpdateExistingCart } from '@/utils/cartUtils';
 
 import { EditableProductItem, OrderProductItem } from '../../../types';
@@ -453,6 +454,7 @@ export default function OrderDialog({
         editQuantity: item.quantity,
       })),
     );
+    setCheckedArr([]);
 
     const getVariantInfoByList = async () => {
       const visibleProducts = products.filter((item: OrderProductItem) => item?.isVisible);
@@ -502,6 +504,7 @@ export default function OrderDialog({
           <OrderCheckboxProduct
             products={editableProducts}
             onProductChange={handleProductChange}
+            checkedArr={checkedArr}
             setCheckedArr={setCheckedArr}
             setReturnArr={setReturnArr}
             textAlign={isMobile ? 'left' : 'right'}

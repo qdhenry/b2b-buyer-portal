@@ -7,7 +7,7 @@ import { PRODUCT_DEFAULT_IMAGE } from '@/constants';
 import { useMobile } from '@/hooks/useMobile';
 import { useB3Lang } from '@/lib/lang';
 import { useAppSelector } from '@/store';
-import { currencyFormat, ordersCurrencyFormat } from '@/utils';
+import { currencyFormat, ordersCurrencyFormat } from '@/utils/b3CurrencyFormat';
 import { getDisplayPrice, judgmentBuyerProduct } from '@/utils/b3Product/b3Product';
 
 import { MoneyFormat, ProductItem } from '../types';
@@ -127,7 +127,7 @@ interface ProductProps<T> {
   getCurrentProductUrls?: (productId: number | undefined) => void;
 }
 
-export default function B3ProductList<T>(props: ProductProps<T>) {
+export function B3ProductList<T>(props: ProductProps<T>) {
   const {
     products,
     renderAction,

@@ -2,16 +2,16 @@ import { useEffect, useState } from 'react';
 import { UploadFile as UploadFileIcon } from '@mui/icons-material';
 import { Box, Card, CardContent, Divider, Typography } from '@mui/material';
 
-import { B3Upload } from '@/components';
 import CustomButton from '@/components/button/CustomButton';
+import { B3Upload } from '@/components/upload/B3Upload';
 import { CART_URL } from '@/constants';
 import { useBlockPendingAccountViewPrice } from '@/hooks/useBlockPendingAccountViewPrice';
 import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 import { useMobile } from '@/hooks/useMobile';
 import { useB3Lang } from '@/lib/lang';
 import { useAppSelector } from '@/store';
-import { snackbar } from '@/utils';
 import b2bLogger from '@/utils/b3Logger';
+import { snackbar } from '@/utils/b3Tip';
 import b3TriggerCartNumber from '@/utils/b3TriggerCartNumber';
 import { createOrUpdateExistingCart } from '@/utils/cartUtils';
 
@@ -32,6 +32,8 @@ export default function QuickOrderPad() {
   const featureFlags = useFeatureFlags();
   const backendValidationEnabled =
     featureFlags['B2B-3318.move_stock_and_backorder_validation_to_backend'] ?? false;
+  const passWithModifiersToProductUpload =
+    featureFlags['B2B-3978.pass_with_modifiers_to_product_upload'] ?? false;
 
   const companyStatus = useAppSelector(({ company }) => company.companyInfo.status);
 
@@ -386,6 +388,7 @@ export default function QuickOrderPad() {
         addBtnText={addBtnText}
         isLoading={isLoading}
         isToCart
+        withModifiers={passWithModifiersToProductUpload}
       />
     </Card>
   );

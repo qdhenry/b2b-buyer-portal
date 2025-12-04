@@ -6,7 +6,7 @@ import { TableColumnItem } from '@/components/table/B3Table';
 import { PRODUCT_DEFAULT_IMAGE } from '@/constants';
 import { useB3Lang } from '@/lib/lang';
 import { useAppSelector } from '@/store';
-import { currencyFormatConvert } from '@/utils';
+import { currencyFormatConvert } from '@/utils/b3CurrencyFormat';
 import { getBCPrice, getDisplayPrice } from '@/utils/b3Product/b3Product';
 
 import QuoteDetailTableCard from './QuoteDetailTableCard';
@@ -40,7 +40,7 @@ interface ListItemProps {
 interface ShoppingDetailTableProps {
   total: number;
   getQuoteTableDetails: GetRequestList<SearchProps, ProductInfoProps>;
-  isHandleApprove: boolean;
+  quoteReviewedBySalesRep: boolean;
   getTaxRate: (taxClassId: number, variants: any) => number;
   displayDiscount: boolean;
   currency: CurrencyProps;
@@ -98,8 +98,14 @@ const StyledImage = styled('img')(() => ({
 
 function QuoteDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>) {
   const b3Lang = useB3Lang();
-  const { total, getQuoteTableDetails, getTaxRate, isHandleApprove, displayDiscount, currency } =
-    props;
+  const {
+    total,
+    getQuoteTableDetails,
+    getTaxRate,
+    quoteReviewedBySalesRep,
+    displayDiscount,
+    currency,
+  } = props;
 
   const isEnableProduct = useAppSelector(
     ({ global }) => global.blockPendingQuoteNonPurchasableOOS.isEnableProduct,
@@ -126,7 +132,7 @@ function QuoteDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>) {
 
   const showPrice = (price: string, row: CustomFieldItems): string | number => {
     if (isEnableProduct) {
-      if (isHandleApprove) return price;
+      if (quoteReviewedBySalesRep) return price;
       return getDisplayPrice({
         price,
         productInfo: row,
