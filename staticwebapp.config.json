@@ -3,8 +3,5 @@
   "navigationFallback": {
     "rewrite": "/index.html",
     "exclude": ["/images/*", "/css/*", "*.{png,jpg,gif,ico,svg}"]
-  },
-  "mimeTypes": {
-    ".webmanifest": "application/manifest+json"
   }
 }
