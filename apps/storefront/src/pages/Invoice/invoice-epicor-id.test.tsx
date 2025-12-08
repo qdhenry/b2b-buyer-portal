@@ -71,7 +71,7 @@ describe('Invoice Epicor ID Display', () => {
                 originalBalance: { code: 'USD', value: '100.00' },
                 companyInfo: { companyId: '1', companyName: 'Test Company' },
                 extraInfo: JSON.stringify([
-                  { fieldName: 'epicoreOrderId', fieldValue: 'EPICOR-ORD-XYZ' },
+                  { fieldName: 'epicorOrderId', fieldValue: 'EPICOR-ORD-XYZ' },
                 ]),
               },
             },
@@ -80,7 +80,7 @@ describe('Invoice Epicor ID Display', () => {
       },
     };
 
-    // Mock getInvoiceList to return an invoice with extraInfo containing epicoreOrderId
+    // Mock getInvoiceList to return an invoice with extraInfo containing epicorOrderId
     server.use(
       graphql.query('GetInvoiceList', () => HttpResponse.json(invoiceListResponse)),
       // Mock getOrdersExtraFields for BC-123 to return the extraFields
@@ -90,7 +90,7 @@ describe('Invoice Epicor ID Display', () => {
             data: {
               order_BC_123: {
                 id: 'BC-123',
-                extraFields: [{ fieldName: 'epicoreOrderId', fieldValue: 'EPICOR-ORD-XYZ' }],
+                extraFields: [{ fieldName: 'epicorOrderId', fieldValue: 'EPICOR-ORD-XYZ' }],
               },
             },
           });
@@ -125,7 +125,7 @@ describe('Invoice Epicor ID Display', () => {
                 openBalance: { code: 'USD', value: '200.00' },
                 originalBalance: { code: 'USD', value: '200.00' },
                 companyInfo: { companyId: '1', companyName: 'Test Company' },
-                // No extraInfo or extraFields with epicoreOrderId
+                // No extraInfo or extraFields with epicorOrderId
               },
             },
           ],
@@ -178,7 +178,7 @@ describe('Invoice Epicor ID Display', () => {
                 originalBalance: { code: 'USD', value: '300.00' },
                 companyInfo: { companyId: '1', companyName: 'Test Company' },
                 extraInfo: JSON.stringify([
-                  { fieldName: 'epicoreOrderId', fieldValue: 'EPICOR-ORD-QWE' },
+                  { fieldName: 'epicorOrderId', fieldValue: 'EPICOR-ORD-QWE' },
                 ]),
               },
             },
@@ -187,7 +187,7 @@ describe('Invoice Epicor ID Display', () => {
       },
     };
 
-    // Mock getInvoiceList to return an invoice with extraInfo containing epicoreOrderId
+    // Mock getInvoiceList to return an invoice with extraInfo containing epicorOrderId
     server.use(
       graphql.query('GetInvoiceList', () => HttpResponse.json(invoiceListResponse)),
       graphql.query('GetOrdersDetails', ({ query }) => {
@@ -196,7 +196,7 @@ describe('Invoice Epicor ID Display', () => {
             data: {
               order_BC_789: {
                 id: 'BC-789',
-                extraFields: [{ fieldName: 'epicoreOrderId', fieldValue: 'EPICOR-ORD-QWE' }],
+                extraFields: [{ fieldName: 'epicorOrderId', fieldValue: 'EPICOR-ORD-QWE' }],
               },
             },
           });

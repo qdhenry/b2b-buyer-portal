@@ -64,7 +64,7 @@ This document describes the architecture and design patterns used in the Statlab
 5a. Store in Context               │      Extract extraFields
     dispatch({ type: 'all' })      │           │
          │                          │           ▼
-         │                          │      Parse epicoreOrderId
+         │                          │      Parse epicorOrderId
          │                          │           │
          │                          │           ▼
          │                          │      Store in local state
@@ -73,7 +73,7 @@ This document describes the architecture and design patterns used in the Statlab
          │
          ▼
 6. Render UI Components
-   - Use epicoreOrderId for display
+   - Use epicorOrderId for display
    - Use orderId for API calls
 ```
 
@@ -111,6 +111,7 @@ src/pages/customizations/
 ## 🎯 Design Principles
 
 ### 1. Separation of Concerns
+
 ```
 Core Application              Customizations Module
 ─────────────────            ────────────────────
@@ -124,6 +125,7 @@ Core Application              Customizations Module
 **Why**: Keeps custom code isolated for easier maintenance and upgrades.
 
 ### 2. Single Source of Truth
+
 ```
 API Response (Raw Order Data)
          │
@@ -141,13 +143,14 @@ API Response (Raw Order Data)
 **Why**: Ensures consistency and prevents data synchronization issues.
 
 ### 3. Progressive Enhancement
+
 ```
 Display Logic:
 ┌──────────────────────────────────────────┐
 │ getDisplayOrderId(fallbackId)            │
 │                                           │
-│ IF epicoreOrderId exists:                │
-│    RETURN epicoreOrderId                 │
+│ IF epicorOrderId exists:                │
+│    RETURN epicorOrderId                 │
 │ ELSE:                                     │
 │    RETURN fallbackId (BigCommerce ID)    │
 └──────────────────────────────────────────┘
@@ -156,13 +159,13 @@ Display Logic:
 **Why**: Application works even if custom data is missing.
 
 ### 4. Explicit Over Implicit
+
 ```tsx
 // Bad - Implicit
-const orderId = epicoreOrderId || bcOrderId;
+const orderId = epicorOrderId || bcOrderId;
 
 // Good - Explicit Function
-const getDisplayOrderId = (fallback: string) => 
-  epicoreOrderId || fallback;
+const getDisplayOrderId = (fallback: string) => epicorOrderId || fallback;
 ```
 
 **Why**: Makes intent clear and easier to maintain.
@@ -170,6 +173,7 @@ const getDisplayOrderId = (fallback: string) =>
 ## 🔌 Integration Points
 
 ### Page Component Integration
+
 ```typescript
 // Example: OrderDetail/index.tsx
 
@@ -188,37 +192,35 @@ setOrderData(order); // ← Feeds customization hook
 
 // 5. Use in UI
 <Typography>
-  {b3Lang('orderDetail.orderId', { 
-    orderId: getDisplayOrderId(orderId) 
+  {b3Lang('orderDetail.orderId', {
+    orderId: getDisplayOrderId(orderId)
   })}
 </Typography>
 ```
 
 ### Hook Internal Structure
+
 ```typescript
 // useOrderCustomizations.ts
 
 export const useOrderCustomizations = ({ order }) => {
   // 1. Local State
-  const [epicoreOrderId, setEpicoreOrderId] = useState<string>('');
-  
+  const [epicorOrderId, setEpicoreOrderId] = useState<string>('');
+
   // 2. Data Extraction
   useEffect(() => {
     if (order?.extraFields) {
-      const field = order.extraFields.find(
-        f => f.fieldName === 'epicoreOrderId'
-      );
+      const field = order.extraFields.find((f) => f.fieldName === 'epicorOrderId');
       setEpicoreOrderId(field?.fieldValue || '');
     }
   }, [order]);
-  
+
   // 3. Helper Functions
-  const getDisplayOrderId = (fallback: string) => 
-    epicoreOrderId || fallback;
-  
+  const getDisplayOrderId = (fallback: string) => epicorOrderId || fallback;
+
   // 4. Public API
   return {
-    epicoreOrderId,
+    epicorOrderId,
     getDisplayOrderId,
   };
 };
@@ -233,9 +235,7 @@ export const useOrderCustomizations = ({ order }) => {
 const [customField, setCustomField] = useState<string>('');
 
 useEffect(() => {
-  const field = order?.extraFields?.find(
-    f => f.fieldName === 'yourFieldName'
-  );
+  const field = order?.extraFields?.find((f) => f.fieldName === 'yourFieldName');
   setCustomField(field?.fieldValue || '');
 }, [order]);
 
@@ -286,6 +286,7 @@ OrderData (from API)
 ```
 
 **Benefits**:
+
 - Compile-time error checking
 - IntelliSense support
 - Self-documenting code
@@ -318,7 +319,7 @@ OrderData (from API)
 │    Customization Hook State              │
 ├─────────────────────────────────────────┤
 │                                          │
-│  epicoreOrderId (string)                 │
+│  epicorOrderId (string)                 │
 │  ├─ Used for: Display to user           │
 │  └─ Source: extraFields extraction      │
 │                                          │
@@ -335,6 +336,7 @@ All customizations in main files use this pattern:
 ```
 
 **Examples**:
+
 ```typescript
 // STATLAB CUSTOMIZATION: Initialize custom order data handling
 const { getDisplayOrderId } = useOrderCustomizations({ order: orderData });
@@ -343,7 +345,9 @@ const { getDisplayOrderId } = useOrderCustomizations({ order: orderData });
 setOrderData(order);
 
 // STATLAB CUSTOMIZATION: Display Epicor Order ID instead of BC Order ID
-{b3Lang('orderDetail.orderId', { orderId: getDisplayOrderId(orderId) })}
+{
+  b3Lang('orderDetail.orderId', { orderId: getDisplayOrderId(orderId) });
+}
 ```
 
 **Why**: Makes it easy to identify and track customizations during upgrades.
@@ -408,6 +412,7 @@ setOrderData(order);
 ## 🚀 Performance Considerations
 
 ### Memoization Strategy
+
 ```typescript
 // Only re-run when order data actually changes
 useEffect(() => {
@@ -421,11 +426,12 @@ const expensiveResult = useMemo(() => {
 ```
 
 ### Avoiding Re-renders
+
 ```typescript
 // Return stable function references
 const getDisplayOrderId = useCallback(
-  (fallback: string) => epicoreOrderId || fallback,
-  [epicoreOrderId]
+  (fallback: string) => epicorOrderId || fallback,
+  [epicorOrderId],
 );
 ```
 

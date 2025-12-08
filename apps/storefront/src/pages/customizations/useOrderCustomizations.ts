@@ -31,7 +31,7 @@ export const getEpicorOrderId = (order: OrderData | null | undefined): string =>
   // Try extraFields (available in detail view)
   if (order.extraFields) {
     const epicoreField = order.extraFields.find(
-      (field: ExtraField) => field.fieldName === 'epicoreOrderId',
+      (field: ExtraField) => field.fieldName === 'epicorOrderId',
     );
     if (epicoreField?.fieldValue) return epicoreField.fieldValue;
   }
@@ -42,7 +42,7 @@ export const getEpicorOrderId = (order: OrderData | null | undefined): string =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const extraFields = JSON.parse(order.extraInfo) as any[];
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const epicoreField = extraFields?.find((f: any) => f.fieldName === 'epicoreOrderId');
+      const epicoreField = extraFields?.find((f: any) => f.fieldName === 'epicorOrderId');
       if (epicoreField?.fieldValue) return epicoreField.fieldValue;
     } catch (e) {
       // ignore json parse error
@@ -60,16 +60,16 @@ export const getEpicorOrderId = (order: OrderData | null | undefined): string =>
  *
  * @example
  * ```tsx
- * const { epicoreOrderId, getDisplayOrderId } = useOrderCustomizations({ order });
+ * const { epicorOrderId, getDisplayOrderId } = useOrderCustomizations({ order });
  * const displayId = getDisplayOrderId(orderId);
  * ```
  */
 export const useOrderCustomizations = ({
   order,
 }: UseOrderCustomizationsProps): UseOrderCustomizationsReturn => {
-  const [epicoreOrderId, setEpicoreOrderId] = useState<string>('');
+  const [epicorOrderId, setEpicoreOrderId] = useState<string>('');
 
-  // Extract epicoreOrderId from order data when it changes
+  // Extract epicorOrderId from order data when it changes
   useEffect(() => {
     const id = getEpicorOrderId(order);
     setEpicoreOrderId(id);
@@ -77,10 +77,10 @@ export const useOrderCustomizations = ({
 
   /**
    * Get the order ID to display to users
-   * Prioritizes epicoreOrderId over the BigCommerce order ID
+   * Prioritizes epicorOrderId over the BigCommerce order ID
    */
   const getDisplayOrderId = (fallbackOrderId: string): string => {
-    return epicoreOrderId || fallbackOrderId;
+    return epicorOrderId || fallbackOrderId;
   };
 
   // Add more custom functions here as needed
@@ -88,7 +88,7 @@ export const useOrderCustomizations = ({
   // const customFunction = () => { ... };
 
   return {
-    epicoreOrderId,
+    epicorOrderId,
     getDisplayOrderId,
     // Add more return values here as needed
   };

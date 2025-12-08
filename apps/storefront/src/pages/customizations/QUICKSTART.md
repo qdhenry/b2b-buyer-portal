@@ -16,23 +16,24 @@ import { useOrderCustomizations, type OrderData } from '@/pages/customizations';
 
 function YourComponent() {
   const [orderData, setOrderData] = useState<OrderData | null>(null);
-  
+
   // Initialize the hook
-  const { getDisplayOrderId, epicoreOrderId } = useOrderCustomizations({ 
-    order: orderData 
+  const { getDisplayOrderId, epicorOrderId } = useOrderCustomizations({
+    order: orderData,
   });
-  
-  // Use the display order ID (returns epicoreOrderId if available, otherwise fallback)
+
+  // Use the display order ID (returns epicorOrderId if available, otherwise fallback)
   const displayId = getDisplayOrderId(orderId);
-  
+
   // Or access directly
-  console.log('Epicor Order ID:', epicoreOrderId);
-  
+  console.log('Epicor Order ID:', epicorOrderId);
+
   return <div>Order: {displayId}</div>;
 }
 ```
 
 **Important**: Make sure to pass the raw order data to the hook:
+
 ```tsx
 // When fetching order data
 const order = await getB2BOrderDetails(id);
@@ -53,7 +54,7 @@ const [customNote, setCustomNote] = useState<string>('');
 useEffect(() => {
   if (order?.extraFields) {
     const noteField = order.extraFields.find(
-      (field: ExtraField) => field.fieldName === 'customOrderNote'
+      (field: ExtraField) => field.fieldName === 'customOrderNote',
     );
     setCustomNote(noteField?.fieldValue || '');
   }
@@ -61,7 +62,7 @@ useEffect(() => {
 
 // Add to return object
 return {
-  epicoreOrderId,
+  epicorOrderId,
   getDisplayOrderId,
   customNote, // Add new value
 };
@@ -71,7 +72,7 @@ return {
 
 ```tsx
 export interface UseOrderCustomizationsReturn {
-  epicoreOrderId: string;
+  epicorOrderId: string;
   getDisplayOrderId: (fallbackOrderId: string) => string;
   customNote: string; // Add new type
 }
@@ -90,9 +91,8 @@ return <Typography>{customNote}</Typography>;
 ### Extracting from extraFields
 
 ```tsx
-const fieldValue = order?.extraFields?.find(
-  (field) => field.fieldName === 'yourFieldName'
-)?.fieldValue || 'default';
+const fieldValue =
+  order?.extraFields?.find((field) => field.fieldName === 'yourFieldName')?.fieldValue || 'default';
 ```
 
 ### Adding Transformation Functions
@@ -121,9 +121,9 @@ const [customData, setCustomData] = useState({
 useEffect(() => {
   if (order?.extraFields) {
     setCustomData({
-      field1: order.extraFields.find(f => f.fieldName === 'field1')?.fieldValue || '',
-      field2: order.extraFields.find(f => f.fieldName === 'field2')?.fieldValue || '',
-      field3: order.extraFields.find(f => f.fieldName === 'field3')?.fieldValue || '',
+      field1: order.extraFields.find((f) => f.fieldName === 'field1')?.fieldValue || '',
+      field2: order.extraFields.find((f) => f.fieldName === 'field2')?.fieldValue || '',
+      field3: order.extraFields.find((f) => f.fieldName === 'field3')?.fieldValue || '',
     });
   }
 }, [order]);
@@ -150,12 +150,14 @@ console.log('Customizations:', customizations);
 ## ⚠️ Common Mistakes
 
 ### ❌ Don't do this:
+
 ```tsx
 // Passing undefined or not storing order data
 const { getDisplayOrderId } = useOrderCustomizations({ order: undefined });
 ```
 
 ### ✅ Do this instead:
+
 ```tsx
 const [orderData, setOrderData] = useState<OrderData | null>(null);
 
@@ -167,15 +169,17 @@ const { getDisplayOrderId } = useOrderCustomizations({ order: orderData });
 ```
 
 ### ❌ Don't modify core order data structures
+
 ```tsx
 // Bad - modifying core data
-order.id = epicoreOrderId; // Don't!
+order.id = epicorOrderId; // Don't!
 ```
 
 ### ✅ Use transformation functions instead
+
 ```tsx
 // Good - provide transformed values
-const getDisplayOrderId = (fallbackId: string) => epicoreOrderId || fallbackId;
+const getDisplayOrderId = (fallbackId: string) => epicorOrderId || fallbackId;
 ```
 
 ## 🔗 Related Files
