@@ -11,7 +11,7 @@ const getTextLenPX = (text: string, fontSize = 14) => {
 
 const getLineNumber = (text: string, fontSize = 14) => {
   const screenWidth = document.body.clientWidth;
-  const isMobile = screenWidth <= 750;
+  const isMobile = screenWidth <= 1024;
 
   // pc padding: 12.8 + 12.8 + 8 + 8 + 12 + 12, origin width: 537px
   // mobile padding: (12.8 + 16 + 8 + 12) * 2, origin width: screenWidth, body margin: 16

@@ -267,7 +267,7 @@ export default function OrderDialog({
         setOpen(false);
         snackbar.success(b3Lang('orderDetail.reorder.productsAdded'), {
           action: {
-            label: b3Lang('orderDetail.reorder.viewCart'),
+            label: b3Lang('orderDetail.viewCart'),
             onClick: () => {
               if (window.b2b.callbacks.dispatchEvent('on-click-cart-button')) {
                 window.location.href = CART_URL;
