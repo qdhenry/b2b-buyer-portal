@@ -116,7 +116,6 @@ describe('OrderDetail ID Resolution', () => {
               },
             },
           });
-          epicorOrderId;
         }
         return HttpResponse.json({ data: { allOrders: { totalCount: 0, edges: [] } } });
       }),
@@ -139,7 +138,6 @@ describe('OrderDetail ID Resolution', () => {
           });
         }
         return HttpResponse.json({ errors: [{ message: 'Not found' }] });
-        epicorOrderId;
       }),
       // Mock Status types to avoid errors
       graphql.query('GetOrderStatuses', () => HttpResponse.json({ data: { orderStatuses: [] } })),
@@ -179,7 +177,6 @@ describe('OrderDetail ID Resolution', () => {
               },
             },
           });
-          epicorOrderId;
         }
         return HttpResponse.json({ data: { allOrders: { totalCount: 0, edges: [] } } });
       }),
@@ -219,7 +216,6 @@ describe('OrderDetail ID Resolution', () => {
           });
         }
         return HttpResponse.json({ errors: [{ message: 'Not found' }] });
-        epicorOrderId;
       }),
       // Mock Status types to avoid errors
       graphql.query('GetOrderStatuses', () => HttpResponse.json({ data: { orderStatuses: [] } })),

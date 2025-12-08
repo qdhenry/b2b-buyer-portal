@@ -2,7 +2,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 import { InvoiceList } from '@/types/invoice';
-import { displayFormat } from '@/utils';
+import { displayFormat } from '@/utils/b3DateFormat';
 
 import { getEpicorOrderId } from '../../pages/customizations';
 

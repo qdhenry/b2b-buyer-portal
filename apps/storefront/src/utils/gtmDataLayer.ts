@@ -1,5 +1,5 @@
 import type { AppStore, RootState } from '@/store';
-import { getActiveCurrencyInfo } from '@/utils';
+import { getActiveCurrencyInfo } from '@/utils/currencyUtils';
 import b2bLogger from '@/utils/b3Logger';
 
 // Import deprecated store as fallback

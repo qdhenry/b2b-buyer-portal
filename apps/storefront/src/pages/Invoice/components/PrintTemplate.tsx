@@ -6,7 +6,7 @@ import PDFObject from 'pdfobject';
 
 import B3Spin from '@/components/spin/B3Spin';
 import { InvoiceList } from '@/types/invoice';
-import { snackbar } from '@/utils';
+import { snackbar } from '@/utils/b3Tip';
 
 import { getEpicorOrderId } from '../../customizations';
 import { getInvoicePdfUrl } from '../utils/pdf';

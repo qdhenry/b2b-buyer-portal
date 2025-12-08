@@ -10,7 +10,8 @@ import { useMobile } from '@/hooks/useMobile';
 import { useB3Lang } from '@/lib/lang';
 import { isB2BUserSelector, useAppSelector } from '@/store';
 import { CustomerRole } from '@/types';
-import { currencyFormat, displayFormat, ordersCurrencyFormat } from '@/utils';
+import { currencyFormat, ordersCurrencyFormat } from '@/utils/b3CurrencyFormat';
+import { displayFormat } from '@/utils/b3DateFormat';
 import b2bLogger from '@/utils/b3Logger';
 
 import {
