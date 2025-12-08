@@ -1,16 +1,20 @@
+/* eslint-disable no-plusplus */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { vi } from 'vitest';
+
 import B3Request from '@/shared/service/request/b3Fetch';
+
 import {
-  getOrdersExtraFields,
-  getB2BAllOrders,
-  getBCAllOrders,
-  getOrderStatusType,
-  getBcOrderStatusType,
-  getOrdersCreatedByUser,
-  getCompanyInfo,
-  getCompaniesInfo,
   clearCompanyCache,
+  getB2BAllOrders,
   getB2BAllOrdersREST,
+  getBCAllOrders,
+  getBcOrderStatusType,
+  getCompaniesInfo,
+  getCompanyInfo,
+  getOrdersCreatedByUser,
+  getOrdersExtraFields,
+  getOrderStatusType,
 } from './orders';
 
 // Mock B3Request

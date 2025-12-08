@@ -1,7 +1,7 @@
 import { renderHook } from '@testing-library/react';
 
-import { getEpicorOrderId, useOrderCustomizations } from './useOrderCustomizations';
 import { OrderData } from './types';
+import { getEpicorOrderId, useOrderCustomizations } from './useOrderCustomizations';
 
 describe('useOrderCustomizations', () => {
   describe('getEpicorOrderId', () => {
