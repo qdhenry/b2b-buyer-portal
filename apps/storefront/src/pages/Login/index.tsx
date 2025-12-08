@@ -1,6 +1,6 @@
+import { Alert, Box, ImageListItem } from '@mui/material';
 import { useContext, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Alert, Box, ImageListItem } from '@mui/material';
 
 import b2bLogo from '@/assets/b2bLogo.png';
 import { B3Card } from '@/components/B3Card';
@@ -14,7 +14,7 @@ import { defaultCreateAccountPanel } from '@/shared/customStyleButton/context/co
 import { GlobalContext } from '@/shared/global';
 import { getBCForcePasswordReset } from '@/shared/service/b2b';
 import { b2bLogin, bcLogin, customerLoginAPI } from '@/shared/service/bc';
-import { isLoggedInSelector, useAppDispatch, useAppSelector } from '@/store';
+import { isLoggedInSelector, useAppDispatch, useAppSelector, useAppStore } from '@/store';
 import { setB2BToken } from '@/store/slices/company';
 import { CustomerRole, UserTypes } from '@/types';
 import { LoginFlagType } from '@/types/login';
@@ -25,12 +25,13 @@ import { snackbar } from '@/utils/b3Tip';
 import { channelId, platform, storeHash } from '@/utils/basicConfig';
 import { CompanyStatusKey, isCompanyError } from '@/utils/companyUtils';
 import { getAssetUrl } from '@/utils/getAssetUrl';
+import { getGTMUserDetails } from '@/utils/gtmDataLayer';
 import { getCurrentCustomerInfo } from '@/utils/loginInfo';
 
 import { type PageProps } from '../PageProps';
 
-import LoginWidget from './component/LoginWidget';
 import { CatalystLogin } from './CatalystLogin';
+import LoginWidget from './component/LoginWidget';
 import { isLoginFlagType, loginCheckout, LoginConfig, loginType } from './config';
 import LoginForm from './LoginForm';
 import LoginPanel from './LoginPanel';
@@ -58,6 +59,7 @@ const shouldLogout: LoginFlagType[] = [
 function Login(props: PageProps) {
   const { setOpenPage } = props;
   const storeDispatch = useAppDispatch();
+  const store = useAppStore();
   const logout = useLogout();
 
   const isLoggedIn = useAppSelector(isLoggedInSelector);
@@ -232,6 +234,23 @@ function Login(props: PageProps) {
           getForcePasswordReset(data.email);
         } else {
           const info = await getCurrentCustomerInfo(token);
+
+          // Verndale Customization: Push login event to GTM dataLayer
+          // Push login event to GTM dataLayer
+          try {
+            const userDetails = getGTMUserDetails(store);
+
+            // Push login event to dataLayer
+            if (window.dataLayer) {
+              window.dataLayer.push({
+                event: 'login',
+                user_details: userDetails,
+              });
+            }
+          } catch (error) {
+            b2bLogger.error('Failed to push login event to dataLayer:', error);
+          }
+          // End Verndale Customization
 
           if (quoteDetailToCheckoutUrl) {
             navigate(quoteDetailToCheckoutUrl);

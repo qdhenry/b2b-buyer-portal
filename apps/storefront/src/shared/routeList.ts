@@ -149,7 +149,7 @@ export const routeList: (BuyerPortalRoute | RouteItem)[] = [
     idLang: 'global.navMenu.quickOrder',
   },
   {
-    path: '/orderDetail/:id',
+    path: '/orderDetail/:bcOrderId/:epicorOrderId?',
     name: 'Order details',
     wsKey: 'router-orders',
     subsidiariesCompanyKey: 'order',

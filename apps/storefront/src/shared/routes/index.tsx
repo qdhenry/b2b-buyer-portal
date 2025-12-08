@@ -51,7 +51,7 @@ const routesMap: Record<string, LazyExoticComponent<(props: PageProps) => ReactE
   '/quotes': QuotesList,
   '/shoppingLists': ShoppingLists,
   '/purchased-products': QuickOrder,
-  '/orderDetail/:id': OrderDetail,
+  '/orderDetail/:bcOrderId/:epicorOrderId?': OrderDetail,
   '/addresses': AddressList,
   '/shoppingList/:id': ShoppingListDetails,
   '/user-management': UserManagement,

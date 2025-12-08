@@ -13,7 +13,7 @@ import { useSort } from '@/hooks/useSort';
 import { useB3Lang } from '@/lib/lang';
 import { GlobalContext } from '@/shared/global';
 import { exportInvoicesAsCSV, getInvoiceList, getInvoiceStats } from '@/shared/service/b2b';
-import { rolePermissionSelector, useAppSelector } from '@/store';
+import { isB2BUserSelector, rolePermissionSelector, useAppSelector } from '@/store';
 import { CustomerRole } from '@/types';
 import { InvoiceList, InvoiceListNode } from '@/types/invoice';
 import { validatePermissionWithComparisonType } from '@/utils/b3CheckPermissions/check';
@@ -25,6 +25,12 @@ import { snackbar } from '@/utils/b3Tip';
 import { handleGetCorrespondingCurrencyToken } from '@/utils/currencyUtils';
 
 import B3Filter from '../../components/filter/B3Filter';
+import {
+  ExtraField,
+  getCompaniesExtraFields,
+  getEpicorOrderId,
+  getOrdersExtraFields,
+} from '../customizations';
 
 import B3Pulldown from './components/B3Pulldown';
 import InvoiceFooter from './components/InvoiceFooter';
@@ -40,7 +46,7 @@ import InvoiceListType, {
   sortIdArr,
 } from './utils/config';
 import { formattingNumericValues } from './utils/payment';
-import { handlePrintPDF } from './utils/pdf';
+import { getInvoicePdfUrl } from './utils/pdf';
 import { InvoiceItemCard } from './InvoiceItemCard';
 
 interface FilterSearchProps {
@@ -86,6 +92,7 @@ function useData() {
   const { invoice: invoiceSubViewPermission } = useAppSelector(
     ({ company }) => company.pagesSubsidiariesPermission,
   );
+  const customerB2bId = useAppSelector(({ company }) => company.customer.b2bId);
 
   return {
     isAgenting,
@@ -95,6 +102,7 @@ function useData() {
     purchasabilityPermission,
     currentCompanyId,
     invoiceSubViewPermission,
+    customerB2bId,
   };
 }
 
@@ -110,6 +118,7 @@ function Invoice() {
     purchasabilityPermission,
     currentCompanyId,
     invoiceSubViewPermission,
+    customerB2bId,
   } = useData();
 
   const navigate = useNavigate();
@@ -270,17 +279,18 @@ function Invoice() {
 
   const handleViewInvoice = async (
     id: string,
-    status: string | number,
-    invoiceCompanyId: string,
+    _status: string | number,
+    _invoiceCompanyId: string,
   ) => {
     try {
-      const invoicePay =
-        Number(invoiceCompanyId) === Number(currentCompanyId)
-          ? invoicePayPermission
-          : invoiceSubPayPermission;
-      setIsRequestLoading(true);
-      const isPayNow = purchasabilityPermission && invoicePay && status !== 2;
-      const pdfUrl = await handlePrintPDF(id, isPayNow);
+      const invoiceNode = list.find((item) => item.node.id === id);
+
+      if (!invoiceNode) {
+        snackbar.error(b3Lang('invoice.pdfUrlResolutionError'));
+        return;
+      }
+
+      const pdfUrl = getInvoicePdfUrl(invoiceNode.node);
 
       if (!pdfUrl) {
         snackbar.error(b3Lang('invoice.pdfUrlResolutionError'));
@@ -295,8 +305,6 @@ function Invoice() {
       window.open(pdfUrl, '_blank', 'fullscreen=yes');
     } catch (err) {
       b2bLogger.error(err);
-    } finally {
-      setIsRequestLoading(false);
     }
   };
 
@@ -475,19 +483,66 @@ function Invoice() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [checkedArr]);
 
-  const fetchList: GetRequestList<Partial<FilterSearchProps>, InvoiceList> = async (params) => {
+  const isB2BUser = useAppSelector(isB2BUserSelector);
+  const [extraFieldsMap, setExtraFieldsMap] = useState<Record<string, ExtraField[]>>({});
+
+      const fetchList: GetRequestList<Partial<FilterSearchProps>, InvoiceList> = async (params) => {
     const {
       invoices: { edges, totalCount },
     } = await getInvoiceList(params);
 
     const invoicesList: InvoiceListNode[] = edges;
 
-    if (type === InvoiceListType.DETAIL && invoicesList.length) {
-      invoicesList.forEach((invoice: InvoiceListNode) => {
-        const item = invoice;
-        item.node.isCollapse = true;
-      });
+    // STATLAB CUSTOMIZATION: Fetch extra fields for displayed order numbers
+    const orderNumbersToFetch = Array.from(
+      new Set(invoicesList.map((item) => item.node.orderNumber).filter((id) => id)),
+    );
+    const companyIdsToFetch = Array.from(
+      new Set(invoicesList.map((item) => item.node.companyInfo.companyId).filter((id) => id)),
+    );
+
+    let extraFieldsMapData: Record<string, ExtraField[]> = {};
+    let companyExtraFieldsMapData: Record<string, ExtraField[]> = {};
+
+    if (orderNumbersToFetch.length > 0) {
+      try {
+        extraFieldsMapData = await getOrdersExtraFields(orderNumbersToFetch, isB2BUser);
+      } catch (e) {
+        b2bLogger.error('Error fetching extra fields for invoices', e);
+      }
     }
+    setExtraFieldsMap(extraFieldsMapData);
+
+    if (companyIdsToFetch.length > 0) {
+      try {
+        companyExtraFieldsMapData = await getCompaniesExtraFields(
+          companyIdsToFetch,
+          customerB2bId,
+        );
+      } catch (e) {
+        b2bLogger.error('Error fetching extra fields for companies', e);
+      }
+    }
+
+    // Merge extra fields into invoicesList
+    invoicesList.forEach((invoiceNode: InvoiceListNode) => {
+      if (invoiceNode.node.orderNumber && extraFieldsMapData[invoiceNode.node.orderNumber]) {
+        invoiceNode.node.extraFields = extraFieldsMapData[invoiceNode.node.orderNumber];
+      }
+      if (
+        invoiceNode.node.companyInfo.companyId &&
+        companyExtraFieldsMapData[invoiceNode.node.companyInfo.companyId]
+      ) {
+        invoiceNode.node.companyInfo.extraFields =
+          companyExtraFieldsMapData[invoiceNode.node.companyInfo.companyId];
+      }
+    });
+
+    if (type === InvoiceListType.DETAIL && invoicesList.length) {
+          invoicesList.forEach((invoice: InvoiceListNode) => {
+            const item = invoice;
+            item.node.isCollapse = true;
+          });    }
 
     invoicesList.forEach((invoiceNode: InvoiceListNode) => {
       const {
@@ -585,23 +640,31 @@ function Invoice() {
       key: 'orderNumber',
       title: b3Lang('invoice.headers.order'),
       isSortable: true,
-      render: (item: InvoiceList) => (
-        <Box
-          role="button"
-          sx={{
-            color: '#000000',
-            cursor: 'pointer',
-            ':hover': {
-              textDecoration: 'underline',
-            },
-          }}
-          onClick={() => {
-            navigate(`/orderDetail/${item.orderNumber}`);
-          }}
-        >
-          {item?.orderNumber || '-'}
-        </Box>
-      ),
+      render: (item: InvoiceList) => {
+        const itemWithExtraFields = {
+          ...item,
+          extraFields: extraFieldsMap[item.orderNumber] || item.extraFields,
+        };
+        const displayOrderId = getEpicorOrderId(itemWithExtraFields) || item.orderNumber;
+
+        return (
+          <Box
+            role="button"
+            sx={{
+              color: '#000000',
+              cursor: 'pointer',
+              ':hover': {
+                textDecoration: 'underline',
+              },
+            }}
+            onClick={() => {
+              navigate(`/orderDetail/${item.orderNumber}`);
+            }}
+          >
+            {displayOrderId || '-'}
+          </Box>
+        );
+      },
       width: '12%',
     },
     {
@@ -958,26 +1021,33 @@ function Invoice() {
           isSelectOtherPageCheckbox
           hover
           isAutoRefresh={false}
-          renderItem={(row, index, checkBox) => (
-            <InvoiceItemCard
-              item={row}
-              checkBox={checkBox}
-              handleSetSelectedInvoiceAccount={handleSetSelectedInvoiceAccountNumber}
-              handleViewInvoice={handleViewInvoice}
-              setIsRequestLoading={setIsRequestLoading}
-              setInvoiceId={setCurrentInvoiceId}
-              handleOpenHistoryModal={setIsOpenHistory}
-              selectedPay={selectedPay}
-              handleGetCorrespondingCurrency={handleGetCorrespondingCurrencyToken}
-              addBottom={list.length - 1 === index}
-              isCurrentCompany={Number(currentCompanyId) === Number(row.companyInfo.companyId)}
-              invoicePay={
-                Number(currentCompanyId) === Number(row.companyInfo.companyId)
-                  ? invoicePayPermission
-                  : invoiceSubPayPermission
-              }
-            />
-          )}
+          renderItem={(row, index, checkBox) => {
+            const itemWithExtraFields = {
+              ...row,
+              extraFields: extraFieldsMap[row.orderNumber] || row.extraFields,
+            };
+
+            return (
+              <InvoiceItemCard
+                item={itemWithExtraFields}
+                checkBox={checkBox}
+                handleSetSelectedInvoiceAccount={handleSetSelectedInvoiceAccountNumber}
+                handleViewInvoice={handleViewInvoice}
+                setIsRequestLoading={setIsRequestLoading}
+                setInvoiceId={setCurrentInvoiceId}
+                handleOpenHistoryModal={setIsOpenHistory}
+                selectedPay={selectedPay}
+                handleGetCorrespondingCurrency={handleGetCorrespondingCurrencyToken}
+                addBottom={list.length - 1 === index}
+                isCurrentCompany={Number(currentCompanyId) === Number(row.companyInfo.companyId)}
+                invoicePay={
+                  Number(currentCompanyId) === Number(row.companyInfo.companyId)
+                    ? invoicePayPermission
+                    : invoiceSubPayPermission
+                }
+              />
+            );
+          }}
         />
         {list.length > 0 && !isMobile && (
           <Box

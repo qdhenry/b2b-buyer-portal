@@ -20,6 +20,7 @@ import { isB2BUserSelector, useAppSelector } from '@/store';
 import { AddressConfigItem, CustomerRole, OrderProductItem, OrderStatusItem } from '@/types';
 import b2bLogger from '@/utils/b3Logger';
 
+import { type OrderData, useOrderCustomizations } from '../customizations';
 import OrderStatus from '../order/components/OrderStatus';
 import { orderStatusTranslationVariables } from '../order/shared/getOrderStatus';
 
@@ -33,6 +34,11 @@ import convertB2BOrderDetails from './shared/B2BOrderData';
 
 interface LocationState {
   isCompanyOrder: boolean;
+}
+
+interface OrderDetailParams extends Record<string, string | undefined> {
+  bcOrderId: string;
+  epicorOrderId?: string;
 }
 
 function OrderDetail() {
@@ -51,7 +57,7 @@ function OrderDetail() {
       : Number(companyInfoId);
   const currentCompanyId = Number(selectCompanyHierarchyId) || companyId;
 
-  const params = useParams();
+  const { bcOrderId, epicorOrderId } = useParams<OrderDetailParams>();
 
   const navigate = useNavigate();
 
@@ -91,10 +97,17 @@ function OrderDetail() {
   const [orderId, setOrderId] = useState('');
   const [isRequestLoading, setIsRequestLoading] = useState(false);
   const [isCurrentCompany, setIsCurrentCompany] = useState(false);
+  const [orderData, setOrderData] = useState<OrderData | null>(null);
 
+  // STATLAB CUSTOMIZATION: Initialize custom order data handling
+  const { getDisplayOrderId } = useOrderCustomizations({ order: orderData });
+
+  // STATLAB CUSTOMIZATION: bcOrderId is always available in URL for reliable API lookups
   useEffect(() => {
-    setOrderId(params.id || '');
-  }, [params]);
+    if (bcOrderId) {
+      setOrderId(bcOrderId);
+    }
+  }, [bcOrderId]);
 
   const goToOrders = () => {
     navigate((location.state as LocationState).isCompanyOrder ? '/company-orders' : '/orders');
@@ -103,8 +116,11 @@ function OrderDetail() {
   useEffect(() => {
     if (orderId) {
       const getOrderDetails = async () => {
+        // STATLAB CUSTOMIZATION: orderId is always the BC Order ID from URL params
         const id = parseInt(orderId, 10);
+
         if (!id) {
+          setIsRequestLoading(false);
           return;
         }
 
@@ -112,9 +128,11 @@ function OrderDetail() {
 
         try {
           const order = isB2BUser ? await getB2BOrderDetails(id) : await getBCOrderDetails(id);
-
           if (order) {
             const { products, companyInfo } = order;
+
+            // STATLAB CUSTOMIZATION: Store raw order data for customization hook
+            setOrderData(order);
 
             const newOrder = {
               ...order,
@@ -274,10 +292,15 @@ function OrderDetail() {
                 color: b3HexToRgb(customColor, 0.87) || '#263238',
               }}
             >
-              {b3Lang('orderDetail.orderId', { orderId })}
-              {b3Lang('orderDetail.purchaseOrderNumber', {
-                purchaseOrderNumber: poNumber ?? '',
+              {/* STATLAB CUSTOMIZATION: Display Epicor Order ID instead of BC Order ID */}
+              {/* Use epicorOrderId from URL params immediately to prevent flash */}
+              {b3Lang('orderDetail.orderId', {
+                orderId: epicorOrderId || getDisplayOrderId(orderId),
               })}
+              {poNumber &&
+                b3Lang('orderDetail.purchaseOrderNumber', {
+                  purchaseOrderNumber: poNumber,
+                })}
             </Typography>
             <OrderStatus code={status} text={getOrderStatusLabel(status)} />
           </Grid>

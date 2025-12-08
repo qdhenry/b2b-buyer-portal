@@ -1,6 +1,6 @@
+import { Box } from '@mui/material';
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Box } from '@mui/material';
 
 import { useMobile } from '@/hooks/useMobile';
 import { useB3Lang } from '@/lib/lang';
@@ -40,6 +40,11 @@ export default function B3AccountInfo({ closeSidebar }: B3AccountInfoProps) {
     if (!item) return;
 
     if (item.key === 'logout') {
+      // Verndale Customization: Delete local storage accountId and userId
+      localStorage.removeItem('accountId');
+      localStorage.removeItem('userId');
+      // End Verndale Customization
+
       navigate('/login?loginFlag=loggedOutLogin');
     } else if (item.type === 'path' && item.key) {
       navigate(item.key);

@@ -6,7 +6,6 @@ import {
   faker,
   getUnixTime,
   graphql,
-  http,
   HttpResponse,
   renderWithProviders,
   screen,
@@ -22,12 +21,15 @@ import { when } from 'vitest-when';
 import { permissionLevels } from '@/constants';
 
 import { InvoiceStatusCode } from './components/InvoiceStatus';
-import { triggerPdfDownload } from './components/triggerPdfDownload';
+import { downloadInvoicePdf, getInvoicePdfUrl } from './utils/pdf';
 import Invoice from './index';
 
-vi.mock('./components/triggerPdfDownload');
-
 const { server } = startMockServer();
+
+vi.mock('./utils/pdf', () => ({
+  getInvoicePdfUrl: vi.fn(),
+  downloadInvoicePdf: vi.fn(),
+}));
 
 const buildInvoicePaymentNodeWith = builder(() => ({
   node: {
@@ -443,9 +445,7 @@ it('shows the current open/overdue values at the header', async () => {
 });
 
 it('opens the invoice in a new window when clicking on the invoice number', async () => {
-  const pdfFile = new Blob(['%PDF-1.4 Mock PDF Content'], { type: 'application/pdf' });
-
-  const getInvoicePDFUrlResponse = vi.fn();
+  const fakeBlobUrl = 'blob:https://example.com/fake-pdf-blob';
 
   server.use(
     graphql.query('GetInvoices', () =>
@@ -462,48 +462,28 @@ it('opens the invoice in a new window when clicking on the invoice number', asyn
     graphql.query('GetInvoiceStats', () =>
       HttpResponse.json(buildInvoiceStatsResponseWith('WHATEVER_VALUES')),
     ),
-    graphql.mutation('GetInvoicePDFUrl', ({ query }) =>
-      HttpResponse.json(getInvoicePDFUrlResponse(query)),
-    ),
-    http.get('https://example.com/invoice.pdf', async () =>
-      HttpResponse.arrayBuffer(await pdfFile.arrayBuffer(), {
-        headers: { 'Content-Type': 'application/pdf' },
-      }),
-    ),
   );
 
-  when(getInvoicePDFUrlResponse)
-    .calledWith(stringContainingAll('invoiceId: 3344'))
-    .thenReturn({ data: { invoicePdf: { url: 'https://example.com/invoice.pdf' } } });
+  vi.mocked(getInvoicePdfUrl).mockReturnValue(fakeBlobUrl);
+  vi.spyOn(window, 'open').mockImplementation(vi.fn());
 
   renderWithProviders(<Invoice />, { preloadedState });
 
   await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
 
-  vi.spyOn(window, 'open').mockImplementation(vi.fn());
-
   const invoiceLink = screen.getByRole('button', { name: '3344' });
-
-  when(window.URL.createObjectURL)
-    .calledWith(pdfFile)
-    .thenReturn('https://localhost:3000/mock-blob-url');
 
   await userEvent.click(invoiceLink);
 
   await waitFor(() => {
-    expect(window.open).toHaveBeenCalledWith(
-      'https://localhost:3000/mock-blob-url',
-      '_blank',
-      'fullscreen=yes',
-    );
+    expect(getInvoicePdfUrl).toHaveBeenCalled();
+    expect(window.open).toHaveBeenCalledWith(fakeBlobUrl, '_blank', 'fullscreen=yes');
   });
 });
 
 describe('when using the action menu', () => {
   it('opens the invoice in a new window', async () => {
-    const pdfFile = new Blob(['%PDF-1.4 Mock PDF Content'], { type: 'application/pdf' });
-
-    const getInvoicePDFUrlResponse = vi.fn();
+    const fakeBlobUrl = 'blob:https://example.com/fake-pdf-blob';
 
     server.use(
       graphql.query('GetInvoices', () =>
@@ -520,25 +500,10 @@ describe('when using the action menu', () => {
       graphql.query('GetInvoiceStats', () =>
         HttpResponse.json(buildInvoiceStatsResponseWith('WHATEVER_VALUES')),
       ),
-      graphql.mutation('GetInvoicePDFUrl', ({ query }) =>
-        HttpResponse.json(getInvoicePDFUrlResponse(query)),
-      ),
-      http.get('https://example.com/invoice.pdf', async () =>
-        HttpResponse.arrayBuffer(await pdfFile.arrayBuffer(), {
-          headers: { 'Content-Type': 'application/pdf' },
-        }),
-      ),
     );
 
-    when(getInvoicePDFUrlResponse)
-      .calledWith(stringContainingAll('invoiceId: 3344'))
-      .thenReturn({ data: { invoicePdf: { url: 'https://example.com/invoice.pdf' } } });
-
+    vi.mocked(getInvoicePdfUrl).mockReturnValue(fakeBlobUrl);
     vi.spyOn(window, 'open').mockImplementation(vi.fn());
-
-    when(window.URL.createObjectURL)
-      .calledWith(pdfFile)
-      .thenReturn('https://localhost:3000/mock-blob-url');
 
     renderWithProviders(<Invoice />, { preloadedState });
 
@@ -553,11 +518,8 @@ describe('when using the action menu', () => {
     await userEvent.click(screen.getByRole('menuitem', { name: 'View invoice' }));
 
     await waitFor(() => {
-      expect(window.open).toHaveBeenCalledWith(
-        'https://localhost:3000/mock-blob-url',
-        '_blank',
-        'fullscreen=yes',
-      );
+      expect(getInvoicePdfUrl).toHaveBeenCalled();
+      expect(window.open).toHaveBeenCalledWith(fakeBlobUrl, '_blank', 'fullscreen=yes');
     });
   });
 
@@ -603,8 +565,6 @@ describe('when using the action menu', () => {
   });
 
   it('downloads an invoice', async () => {
-    const getInvoicePDFUrlResponse = vi.fn();
-
     server.use(
       graphql.query('GetInvoices', () =>
         HttpResponse.json(
@@ -620,14 +580,7 @@ describe('when using the action menu', () => {
       graphql.query('GetInvoiceStats', () =>
         HttpResponse.json(buildInvoiceStatsResponseWith('WHATEVER_VALUES')),
       ),
-      graphql.mutation('GetInvoicePDFUrl', ({ query }) =>
-        HttpResponse.json(getInvoicePDFUrlResponse(query)),
-      ),
     );
-
-    when(getInvoicePDFUrlResponse)
-      .calledWith(stringContainingAll('invoiceId: 3344'))
-      .thenReturn({ data: { invoicePdf: { url: 'https://example.com/invoice.pdf' } } });
 
     renderWithProviders(<Invoice />, { preloadedState });
 
@@ -641,12 +594,11 @@ describe('when using the action menu', () => {
 
     await userEvent.click(screen.getByRole('menuitem', { name: 'Download' }));
 
-    expect(triggerPdfDownload).toHaveBeenCalledWith('https://example.com/invoice.pdf', 'file.pdf');
+    expect(downloadInvoicePdf).toHaveBeenCalled();
   });
 
   it('prints an invoice', async () => {
-    const pdfFile = new Blob(['%PDF-1.4 Mock PDF Content'], { type: 'application/pdf' });
-    const getInvoicePDFUrlResponse = vi.fn();
+    const fakeBlobUrl = 'blob:https://example.com/fake-pdf-blob';
 
     server.use(
       graphql.query('GetInvoices', () =>
@@ -663,25 +615,10 @@ describe('when using the action menu', () => {
       graphql.query('GetInvoiceStats', () =>
         HttpResponse.json(buildInvoiceStatsResponseWith('WHATEVER_VALUES')),
       ),
-      graphql.mutation('GetInvoicePDFUrl', ({ query }) =>
-        HttpResponse.json(getInvoicePDFUrlResponse(query)),
-      ),
-      http.get('https://example.com/invoice.pdf', async () =>
-        HttpResponse.arrayBuffer(await pdfFile.arrayBuffer(), {
-          headers: { 'Content-Type': 'application/pdf' },
-        }),
-      ),
     );
 
+    vi.mocked(getInvoicePdfUrl).mockReturnValue(fakeBlobUrl);
     vi.spyOn(window, 'open').mockImplementation(vi.fn());
-
-    when(window.URL.createObjectURL)
-      .calledWith(pdfFile)
-      .thenReturn('https://localhost:3000/mock-blob-url');
-
-    when(getInvoicePDFUrlResponse)
-      .calledWith(stringContainingAll('invoiceId: 3344'))
-      .thenReturn({ data: { invoicePdf: { url: 'https://example.com/invoice.pdf' } } });
 
     renderWithProviders(<Invoice />, { preloadedState });
 
@@ -696,11 +633,8 @@ describe('when using the action menu', () => {
     await userEvent.click(screen.getByRole('menuitem', { name: 'Print' }));
 
     await waitFor(() => {
-      expect(window.open).toHaveBeenCalledWith(
-        'https://localhost:3000/mock-blob-url',
-        '_blank',
-        'fullscreen=yes',
-      );
+      expect(getInvoicePdfUrl).toHaveBeenCalled();
+      expect(window.open).toHaveBeenCalledWith(fakeBlobUrl, '_blank', 'fullscreen=yes');
     });
   });
 

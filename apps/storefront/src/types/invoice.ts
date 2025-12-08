@@ -1,3 +1,5 @@
+import { ExtraField } from '@/pages/customizations';
+
 export interface CompanyInfoTypes {
   companyId: string;
   companyName: string;
@@ -8,6 +10,7 @@ export interface CompanyInfoTypes {
   companyZipCode: string;
   phoneNumber: string;
   bcId: string;
+  extraFields?: ExtraField[];
 }
 
 export interface InvoiceList {
@@ -32,6 +35,9 @@ export interface InvoiceList {
   isCollapse?: boolean;
   disableCurrentCheckbox?: boolean;
   sortDirection?: string;
+  // STATLAB CUSTOMIZATION: Add extraFields and extraInfo for orderNumber lookup
+  extraFields?: ExtraField[];
+  extraInfo?: string;
 }
 
 export interface InvoiceListNode {

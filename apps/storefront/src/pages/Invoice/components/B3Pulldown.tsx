@@ -12,9 +12,7 @@ import { b2bPermissionsMap } from '@/utils/b3CheckPermissions/config';
 import { snackbar } from '@/utils/b3Tip';
 
 import { gotoInvoiceCheckoutUrl } from '../utils/payment';
-import { getInvoiceDownloadPDFUrl, handlePrintPDF } from '../utils/pdf';
-
-import { triggerPdfDownload } from './triggerPdfDownload';
+import { downloadInvoicePdf, getInvoicePdfUrl } from '../utils/pdf';
 
 const StyledMenu = styled(Menu)(() => ({
   '& .MuiPaper-elevation': {
@@ -35,7 +33,7 @@ interface B3PulldownProps {
 
 function B3Pulldown({
   row,
-  setIsRequestLoading,
+  setIsRequestLoading: _setIsRequestLoading,
   setInvoiceId,
   handleOpenHistoryModal,
   isCurrentCompany,
@@ -65,28 +63,20 @@ function B3Pulldown({
     setIsOpen(true);
   };
 
-  const handleViewInvoice = async (isPayNow: boolean) => {
-    const { id } = row;
-
+  const handleViewInvoice = () => {
     close();
 
-    setIsRequestLoading(true);
+    try {
+      const pdfUrl = getInvoicePdfUrl(row);
+      if (!pdfUrl) {
+        snackbar.error('pdf url resolution error');
+        return;
+      }
 
-    const pdfUrl = await handlePrintPDF(id, isPayNow);
-
-    setIsRequestLoading(false);
-
-    if (!pdfUrl) {
-      snackbar.error('pdf url resolution error');
-      return;
+      window.open(pdfUrl, '_blank', 'fullscreen=yes');
+    } catch (e) {
+      snackbar.error('Error generating PDF');
     }
-
-    const { href } = window.location;
-    if (!href.includes('invoice')) {
-      return;
-    }
-
-    window.open(pdfUrl, '_blank', 'fullscreen=yes');
   };
 
   const handleViewOrder = () => {
@@ -124,16 +114,13 @@ function B3Pulldown({
     handleOpenHistoryModal(true);
   };
 
-  const handleDownloadPDF = async () => {
-    const { id } = row;
-
+  const handleDownloadPDF = () => {
     close();
-    setIsRequestLoading(true);
-    const url = await getInvoiceDownloadPDFUrl(id);
-
-    setIsRequestLoading(false);
-
-    triggerPdfDownload(url, 'file.pdf');
+    try {
+      downloadInvoicePdf(row);
+    } catch (e) {
+      snackbar.error('Error downloading PDF');
+    }
   };
 
   useEffect(() => {
@@ -187,9 +174,7 @@ function B3Pulldown({
           sx={{
             color: 'primary.main',
           }}
-          onClick={() =>
-            handleViewInvoice(row.status !== 2 && invoicePayPermission && purchasabilityPermission)
-          }
+          onClick={() => handleViewInvoice()}
         >
           {b3Lang('invoice.actions.viewInvoice')}
         </MenuItem>
@@ -232,9 +217,7 @@ function B3Pulldown({
           sx={{
             color: 'primary.main',
           }}
-          onClick={() =>
-            handleViewInvoice(row.status !== 2 && invoicePayPermission && purchasabilityPermission)
-          }
+          onClick={() => handleViewInvoice()}
         >
           {b3Lang('invoice.actions.print')}
         </MenuItem>

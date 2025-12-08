@@ -6,7 +6,7 @@ query GetInvoices {
   invoices (
     search: "${data.q || ''}"
     first: ${data.first}
-    offset: ${data.offset} 
+    offset: ${data.offset}
     ${data?.status ? `status: ${convertArrayToGraphql(data.status ? [data.status] : [])}` : ''}
     ${data?.beginDateAt ? `beginDateAt: "${data.beginDateAt}"` : ''}
     ${data?.endDateAt ? `endDateAt: "${data.endDateAt}"` : ''}
