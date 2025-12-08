@@ -422,13 +422,21 @@ export function OrderAction(props: OrderActionProps) {
   const handleOrderComments = (value: string) => {
     const commentsArr = value.split(/\n/g);
 
+    // Filter out epicorOrderId lines - internal data not for display
+    const filteredComments = commentsArr.filter((item) => {
+      const trimmedLower = item.trim().toLowerCase();
+      return (
+        !trimmedLower.startsWith('epicororderid:') && !trimmedLower.startsWith('epicoreorderid:')
+      );
+    });
+
     const comments: {
       [k: string]: string;
     } = {};
 
     const dividingLine = ['-------------------------------------'];
 
-    commentsArr.forEach((item, index) => {
+    filteredComments.forEach((item, index) => {
       if (item.trim().length > 0) {
         const isHaveTitle = item.trim().includes(':');
 
@@ -474,6 +482,7 @@ export function OrderAction(props: OrderActionProps) {
   ];
 
   const invoiceBtnPermissions = Number(ipStatus) !== 0 || createdEmail === emailAddress;
+
   const orderData: OrderData[] = [
     {
       header: b3Lang('orderDetail.summary'),

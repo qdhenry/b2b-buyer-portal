@@ -337,8 +337,6 @@ function Order({ isCompanyOrder = false }: OrderProps) {
       key: 'totalIncTax',
       title: b3Lang('orders.grandTotal'),
       render: ({ money, totalIncTax }) => {
-        console.log('Money', money);
-        console.log('totalIncTax', totalIncTax);
         if (!money) return currencyFormat(totalIncTax);
         try {
           let parsed = JSON.parse(money);
