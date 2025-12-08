@@ -45,5 +45,5 @@ jobs:
       app_location: "apps/storefront"
       api_location: ""
       output_location: "apps/storefront/dist"
-      app_build_command: "yarn build"
+      app_build_command: "npm use 22 && yarn build"
     displayName: 'Deploy to Azure Static Web Apps'
