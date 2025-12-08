@@ -3,5 +3,8 @@
   "navigationFallback": {
     "rewrite": "/index.html",
     "exclude": ["/images/*", "/css/*", "*.{png,jpg,gif,ico,svg}"]
+  },
+  "platform": {
+    "apiRuntime": "node:20"
   }
 }
