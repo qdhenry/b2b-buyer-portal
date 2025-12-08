@@ -31,8 +31,8 @@ jobs:
     displayName: 'Install dependencies'
   - script: node -v
     displayName: 'Check Node.js version'  
-  - script: yarn build
-    displayName: 'Build application with Turbo'
+#  - script: yarn build
+#    displayName: 'Build application with Turbo'
   - script: |
       echo "Verifying build artifacts:"
       ls -la /working_dir
@@ -44,5 +44,6 @@ jobs:
       azure_static_web_apps_api_token: $(AZURE_STATIC_WEB_APPS_API_TOKEN_THANKFUL_MUD_037637B10)
       app_location: "apps/storefront"
       api_location: ""
-      output_location: "apps/storefront/dist"
+      output_location: "apps/storefront/dist",
+      app_build_command: "yarn build"
     displayName: 'Deploy to Azure Static Web Apps'
