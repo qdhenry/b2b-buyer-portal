@@ -39,7 +39,8 @@ jobs:
     displayName: 'Build application with Turbo'
   - script: |
       echo "Verifying build artifacts:"
-      ls -la apps
+      ls -la apps/storefront 
+      node -v
       [ -f apps/storefront/dist/index.html ] && echo "✓ index.html found" || echo "✗ index.html NOT found"
     displayName: 'Verify build artifacts'
   - task: AzureStaticWebApp@0
