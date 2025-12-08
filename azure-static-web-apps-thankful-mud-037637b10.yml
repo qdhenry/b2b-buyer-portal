@@ -31,8 +31,8 @@ jobs:
     displayName: 'Install dependencies'
   - script: node -v
     displayName: 'Check Node.js version'  
-#  - script: yarn build
-#    displayName: 'Build application with Turbo'
+  - script: yarn build
+    displayName: 'Build application with Turbo'
   - script: |
       echo "Verifying build artifacts:"
       ls -la /working_dir
@@ -46,4 +46,6 @@ jobs:
       api_location: ""
       output_location: "apps/storefront/dist"
       app_build_command: "npm use 22 && yarn build"
+      config_file_location: "staticwebapp.config.json"
+      skip_app_build: true
     displayName: 'Deploy to Azure Static Web Apps'
