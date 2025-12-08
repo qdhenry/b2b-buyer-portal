@@ -9,6 +9,9 @@ trigger:
     include:
       - main
 
+variables:
+  nodeVersion: '22.x'
+
 jobs:
 - job: build_and_deploy_job
   displayName: Build and Deploy Job
@@ -20,21 +23,20 @@ jobs:
   steps:
   - checkout: self
     submodules: true
-  - task: NodeTool@0
+  - task: UseNode@1
     inputs:
-      versionSpec: '22.x'
-    displayName: 'Install Node.js 22'
+      version: $(nodeVersion)
+    displayName: 'Install Node.js'
+#  - task: NodeTool@0
+#    inputs:
+#      versionSpec: '22.x'
+#    displayName: 'Install Node.js 22'
   - script: yarn install
     displayName: 'Install dependencies'
   - script: node -v
     displayName: 'Check Node.js version'  
   - script: yarn build
     displayName: 'Build application with Turbo'
-  - script: |
-      echo "Verifying build artifacts:"
-      ls -la apps/storefront/
-      [ -f apps/storefront/index.html ] && echo "✓ index.html found" || echo "✗ index.html NOT found"
-    displayName: 'Verify build artifacts'
   - task: AzureStaticWebApp@0
     inputs:
       azure_static_web_apps_api_token: $(AZURE_STATIC_WEB_APPS_API_TOKEN_THANKFUL_MUD_037637B10)
