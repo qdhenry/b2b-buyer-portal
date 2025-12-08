@@ -27,10 +27,10 @@ jobs:
     inputs:
       version: $(nodeVersion)
     displayName: 'Install Node.js'
-#  - task: NodeTool@0
-#    inputs:
-#      versionSpec: '22.x'
-#    displayName: 'Install Node.js 22'
+  - task: NodeTool@0
+    inputs:
+      versionSpec: '22.x'
+    displayName: 'Install Node.js 22'
   - script: yarn install
     displayName: 'Install dependencies'
   - script: node -v
