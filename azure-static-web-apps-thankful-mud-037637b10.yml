@@ -29,7 +29,7 @@ jobs:
     displayName: 'Install Node.js'
   - task: NodeTool@0
     inputs:
-      versionSpec: '22.x'
+      versionSpec: $(nodeVersion)
     displayName: 'Install Node.js 22'
   - script: yarn install
     displayName: 'Install dependencies'
@@ -40,7 +40,7 @@ jobs:
   - task: AzureStaticWebApp@0
     inputs:
       azure_static_web_apps_api_token: $(AZURE_STATIC_WEB_APPS_API_TOKEN_THANKFUL_MUD_037637B10)
-      app_location: "apps/storefront"
+      app_location: "apps"
       api_location: ""
       output_location: ""
     displayName: 'Deploy to Azure Static Web Apps'
