@@ -195,7 +195,7 @@ export default function B3Nav({ closeSidebar }: B3NavProps) {
     <List
       sx={{
         width: '100%',
-        maxWidth: 360,
+
         bgcolor: isMobile ? 'background.paper' : 'background.default',
         color: primaryColor || 'info.main',
         '& .MuiListItem-root': {
