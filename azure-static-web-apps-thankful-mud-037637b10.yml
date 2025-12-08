@@ -26,12 +26,14 @@ jobs:
     displayName: 'Install Node.js 22'
   - script: yarn install
     displayName: 'Install dependencies'
+  - script: node -v
+    displayName: 'Check Node.js version'  
   - script: yarn build
     displayName: 'Build application with Turbo'
   - script: |
       echo "Verifying build artifacts:"
-      ls -la apps/storefront/dist/
-      [ -f apps/storefront/dist/index.html ] && echo "✓ index.html found" || echo "✗ index.html NOT found"
+      ls -la apps/storefront/
+      [ -f apps/storefront/index.html ] && echo "✓ index.html found" || echo "✗ index.html NOT found"
     displayName: 'Verify build artifacts'
   - task: AzureStaticWebApp@0
     inputs:
