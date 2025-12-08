@@ -119,12 +119,18 @@ describe('graphql/orders', () => {
         // Mock responses for both batches
         const batch1Response: Record<string, { id: string; extraFields: any[] }> = {};
         for (let i = 1; i <= 10; i++) {
-          batch1Response[`order_${i}`] = { id: String(i), extraFields: [{ fieldName: 'batch', fieldValue: '1' }] };
+          batch1Response[`order_${i}`] = {
+            id: String(i),
+            extraFields: [{ fieldName: 'batch', fieldValue: '1' }],
+          };
         }
 
         const batch2Response: Record<string, { id: string; extraFields: any[] }> = {};
         for (let i = 11; i <= 15; i++) {
-          batch2Response[`order_${i}`] = { id: String(i), extraFields: [{ fieldName: 'batch', fieldValue: '2' }] };
+          batch2Response[`order_${i}`] = {
+            id: String(i),
+            extraFields: [{ fieldName: 'batch', fieldValue: '2' }],
+          };
         }
 
         (B3Request.graphqlB2B as any)
@@ -188,7 +194,7 @@ describe('graphql/orders', () => {
         for (let i = 1; i <= 10; i++) {
           batch1Response[`order_${i}`] = {
             id: String(i),
-            extraFields: [{ fieldName: 'epicoreOrderId', fieldValue: `EPI-${i}` }]
+            extraFields: [{ fieldName: 'epicorOrderId', fieldValue: `EPI-${i}` }],
           };
         }
 
@@ -196,7 +202,7 @@ describe('graphql/orders', () => {
         for (let i = 11; i <= 12; i++) {
           batch2Response[`order_${i}`] = {
             id: String(i),
-            extraFields: [{ fieldName: 'epicoreOrderId', fieldValue: `EPI-${i}` }]
+            extraFields: [{ fieldName: 'epicorOrderId', fieldValue: `EPI-${i}` }],
           };
         }
 
@@ -207,10 +213,10 @@ describe('graphql/orders', () => {
         const result = await getOrdersExtraFields(ids, true);
 
         // Verify all IDs have correct extra fields
-        expect(result['1']).toEqual([{ fieldName: 'epicoreOrderId', fieldValue: 'EPI-1' }]);
-        expect(result['10']).toEqual([{ fieldName: 'epicoreOrderId', fieldValue: 'EPI-10' }]);
-        expect(result['11']).toEqual([{ fieldName: 'epicoreOrderId', fieldValue: 'EPI-11' }]);
-        expect(result['12']).toEqual([{ fieldName: 'epicoreOrderId', fieldValue: 'EPI-12' }]);
+        expect(result['1']).toEqual([{ fieldName: 'epicorOrderId', fieldValue: 'EPI-1' }]);
+        expect(result['10']).toEqual([{ fieldName: 'epicorOrderId', fieldValue: 'EPI-10' }]);
+        expect(result['11']).toEqual([{ fieldName: 'epicorOrderId', fieldValue: 'EPI-11' }]);
+        expect(result['12']).toEqual([{ fieldName: 'epicorOrderId', fieldValue: 'EPI-12' }]);
       });
     });
   });
@@ -218,20 +224,22 @@ describe('graphql/orders', () => {
   describe('getB2BAllOrders', () => {
     it('calls graphqlB2B with correct parameters', async () => {
       (B3Request.graphqlB2B as any).mockResolvedValue({ allOrders: [] });
-      
+
       const params = {
         q: 'search',
         first: 10,
         offset: 0,
         orderBy: 'createdAt',
       };
-      
+
       await getB2BAllOrders(params);
-      
-      expect(B3Request.graphqlB2B).toHaveBeenCalledWith(expect.objectContaining({
-        query: expect.stringContaining('allOrders'),
-      }));
-      
+
+      expect(B3Request.graphqlB2B).toHaveBeenCalledWith(
+        expect.objectContaining({
+          query: expect.stringContaining('allOrders'),
+        }),
+      );
+
       const queryArg = (B3Request.graphqlB2B as any).mock.calls[0][0].query;
       expect(queryArg).toContain('search: "search"');
       expect(queryArg).toContain('first: 10');
@@ -241,18 +249,20 @@ describe('graphql/orders', () => {
   describe('getBCAllOrders', () => {
     it('calls graphqlB2B with correct parameters for customer orders', async () => {
       (B3Request.graphqlB2B as any).mockResolvedValue({ customerOrders: [] });
-      
+
       const params = {
         first: 5,
         offset: 0,
         orderBy: 'date',
       };
-      
+
       await getBCAllOrders(params);
-      
-      expect(B3Request.graphqlB2B).toHaveBeenCalledWith(expect.objectContaining({
-        query: expect.stringContaining('customerOrders'),
-      }));
+
+      expect(B3Request.graphqlB2B).toHaveBeenCalledWith(
+        expect.objectContaining({
+          query: expect.stringContaining('customerOrders'),
+        }),
+      );
     });
   });
 
@@ -260,12 +270,14 @@ describe('graphql/orders', () => {
     it('fetches order statuses', async () => {
       const mockStatuses = [{ systemLabel: 'New', customLabel: 'New Order', statusCode: '0' }];
       (B3Request.graphqlB2B as any).mockResolvedValue({ orderStatuses: mockStatuses });
-      
+
       const result = await getOrderStatusType();
-      
-      expect(B3Request.graphqlB2B).toHaveBeenCalledWith(expect.objectContaining({
-        query: expect.stringContaining('orderStatuses'),
-      }));
+
+      expect(B3Request.graphqlB2B).toHaveBeenCalledWith(
+        expect.objectContaining({
+          query: expect.stringContaining('orderStatuses'),
+        }),
+      );
       expect(result).toEqual(mockStatuses);
     });
   });
@@ -274,12 +286,14 @@ describe('graphql/orders', () => {
     it('fetches BC order statuses', async () => {
       const mockStatuses = [{ systemLabel: 'New', customLabel: 'New', statusCode: '0' }];
       (B3Request.graphqlB2B as any).mockResolvedValue({ bcOrderStatuses: mockStatuses });
-      
+
       const result = await getBcOrderStatusType();
-      
-      expect(B3Request.graphqlB2B).toHaveBeenCalledWith(expect.objectContaining({
-        query: expect.stringContaining('bcOrderStatuses'),
-      }));
+
+      expect(B3Request.graphqlB2B).toHaveBeenCalledWith(
+        expect.objectContaining({
+          query: expect.stringContaining('bcOrderStatuses'),
+        }),
+      );
       expect(result).toEqual(mockStatuses);
     });
   });
@@ -290,9 +304,11 @@ describe('graphql/orders', () => {
 
       await getOrdersCreatedByUser(123);
 
-      expect(B3Request.graphqlB2B).toHaveBeenCalledWith(expect.objectContaining({
-        query: expect.stringContaining('createdByUser'),
-      }));
+      expect(B3Request.graphqlB2B).toHaveBeenCalledWith(
+        expect.objectContaining({
+          query: expect.stringContaining('createdByUser'),
+        }),
+      );
 
       const queryArg = (B3Request.graphqlB2B as any).mock.calls[0][0].query;
       expect(queryArg).toContain('companyId: 123');
@@ -414,7 +430,7 @@ describe('graphql/orders', () => {
       expect(B3Request.get).toHaveBeenCalledWith(
         '/api/v2/orders',
         'B2BRest',
-        expect.objectContaining({ showExtra: true, limit: 10, offset: 0 })
+        expect.objectContaining({ showExtra: true, limit: 10, offset: 0 }),
       );
     });
 
@@ -434,7 +450,7 @@ describe('graphql/orders', () => {
           decimal_token: '.',
           thousands_token: ',',
         },
-        extraFields: [{ fieldName: 'epicoreOrderId', fieldValue: 'EPI-123' }],
+        extraFields: [{ fieldName: 'epicorOrderId', fieldValue: 'EPI-123' }],
         createdAt: '1699900000',
       };
       const mockResponse = {
@@ -457,7 +473,7 @@ describe('graphql/orders', () => {
       expect(result.edges[0].node.firstName).toBe('John');
       expect(result.edges[0].node.lastName).toBe('Doe');
       expect(result.extraFieldsMap['12345']).toEqual([
-        { fieldName: 'epicoreOrderId', fieldValue: 'EPI-123' },
+        { fieldName: 'epicorOrderId', fieldValue: 'EPI-123' },
       ]);
     });
 
@@ -537,7 +553,7 @@ describe('graphql/orders', () => {
           beginDateAt: '2024-01-01',
           endDateAt: '2024-12-31',
           companyIds: '1,2,3',
-        })
+        }),
       );
     });
 
@@ -598,7 +614,7 @@ describe('graphql/orders', () => {
         const mockOrder = {
           orderId: 456,
           companyName: 'Euro Corp',
-          totalIncTax: 150.50,
+          totalIncTax: 150.5,
           poNumber: '',
           orderStatus: 'Complete',
           firstName: 'Euro',

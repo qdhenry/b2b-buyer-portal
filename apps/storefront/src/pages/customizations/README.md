@@ -15,18 +15,20 @@ This directory contains all Statlab-specific customizations for the B2B Portal a
 
 **Business Requirement**: Display the Epicor order ID instead of the BigCommerce order ID to users.
 
-**Implementation**: 
-- Extracts `epicoreOrderId` from the order's `extraFields` array
+**Implementation**:
+
+- Extracts `epicorOrderId` from the order's `extraFields` array
 - Provides `getDisplayOrderId()` function that returns the Epicor ID with fallback to BC ID
 
 **Usage**:
+
 ```tsx
 // From OrderDetail page:
 import { useOrderCustomizations } from '../customizations';
 // Or from other locations:
 import { useOrderCustomizations } from '@/pages/customizations';
 
-const { epicoreOrderId, getDisplayOrderId } = useOrderCustomizations({ order });
+const { epicorOrderId, getDisplayOrderId } = useOrderCustomizations({ order });
 const displayId = getDisplayOrderId(orderId);
 ```
 
@@ -39,23 +41,23 @@ Add your custom logic to `useOrderCustomizations.ts`:
 ```tsx
 export const useOrderCustomizations = ({ order }) => {
   // Existing code...
-  
+
   // Add your new customization
   const [customValue, setCustomValue] = useState('');
-  
+
   useEffect(() => {
     // Your custom logic
   }, [order]);
-  
+
   const customFunction = () => {
     // Your custom function
   };
-  
+
   return {
-    epicoreOrderId,
+    epicorOrderId,
     getDisplayOrderId,
-    customValue,      // Add new values
-    customFunction,   // Add new functions
+    customValue, // Add new values
+    customFunction, // Add new functions
   };
 };
 ```
@@ -75,6 +77,7 @@ export interface UseOrderCustomizationsReturn {
 ### Step 3: Document
 
 Update this README with:
+
 - What the customization does
 - Why it's needed (business requirement)
 - How to use it
@@ -133,21 +136,14 @@ import { useOrderCustomizations } from '../customizations';
 
 function OrderDetail() {
   const [order, setOrder] = useState(null);
-  
+
   // Initialize customizations
-  const { 
-    epicoreOrderId, 
-    getDisplayOrderId 
-  } = useOrderCustomizations({ order });
-  
+  const { epicorOrderId, getDisplayOrderId } = useOrderCustomizations({ order });
+
   // Use in component
   const displayId = getDisplayOrderId(orderId);
-  
-  return (
-    <Typography>
-      Order ID: {displayId}
-    </Typography>
-  );
+
+  return <Typography>Order ID: {displayId}</Typography>;
 }
 ```
 
@@ -161,9 +157,7 @@ const [epicorStatus, setEpicorStatus] = useState('');
 
 useEffect(() => {
   if (order?.extraFields) {
-    const statusField = order.extraFields.find(
-      field => field.fieldName === 'epicorStatus'
-    );
+    const statusField = order.extraFields.find((field) => field.fieldName === 'epicorStatus');
     setEpicorStatus(statusField?.fieldValue || '');
   }
 }, [order]);
@@ -186,5 +180,6 @@ For questions about these customizations, contact the Statlab development team.
 ## Changelog
 
 ### Version 1.0.0
+
 - Initial setup of customizations module
 - Added Epicor Order ID display customization

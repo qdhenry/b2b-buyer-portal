@@ -40,11 +40,11 @@ export interface UseOrderCustomizationsReturn {
    * The Epicor order ID extracted from extraFields or extraInfo
    * Falls back to empty string if not found
    */
-  epicoreOrderId: string;
+  epicorOrderId: string;
 
   /**
    * Function to get the display order ID
-   * Returns epicoreOrderId if available, otherwise falls back to the provided orderId
+   * Returns epicorOrderId if available, otherwise falls back to the provided orderId
    *
    * @param fallbackOrderId - The BigCommerce order ID to use as fallback
    * @returns The order ID to display to the user
@@ -69,8 +69,8 @@ export interface MoneyFormat {
 }
 
 export interface RESTOrderItem {
-  id: number;              // B2B internal ID
-  bcOrderId: string;       // BigCommerce order ID
+  id: number; // B2B internal ID
+  bcOrderId: string; // BigCommerce order ID
   totalIncTax: number;
   poNumber: string | null;
   status: string;
@@ -85,8 +85,8 @@ export interface RESTOrderItem {
   isArchived: boolean;
   channelId: number;
   channelName: string;
-  extraFields: ExtraField[];  // Already parsed array
-  extraInfo: object | null;   // Object (not string)
+  extraFields: ExtraField[]; // Already parsed array
+  extraInfo: object | null; // Object (not string)
   createdAt: number;
   updatedAt: number;
 }

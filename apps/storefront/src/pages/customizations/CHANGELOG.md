@@ -10,12 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 #### Customization Module Relocation
+
 - **Moved customizations directory** from `/OrderDetail/customizations` to `/pages/customizations`
   - Purpose: Centralize all page-level customizations in one location
   - Impact: Allows sharing customizations across multiple pages
   - Import paths updated: Use `../customizations` from page components
 
 #### Documentation Updates
+
 - **Updated all documentation** to reflect the new centralized structure
   - README.md: Now describes general B2B Portal customizations
   - QUICKSTART.md: Updated import paths and examples
@@ -25,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 #### Infrastructure for Future Customizations
+
 - **Prepared module structure** for additional customization hooks
   - Future hooks can be added for Quotes, Users, Products, etc.
   - Each hook will follow the same pattern as `useOrderCustomizations`
@@ -35,24 +38,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 #### Customization Infrastructure
+
 - **Created customizations module structure** (initially in `/OrderDetail/customizations`)
   - Purpose: Isolate all Statlab-specific customizations for easier maintenance and upgrades
   - Impact: Separates custom code from base application code
   - Files: `index.ts`, `types.ts`, `README.md`, `QUICKSTART.md`
 
 #### useOrderCustomizations Hook
+
 - **Created main customization hook** (`useOrderCustomizations.ts`)
   - Purpose: Central place for all order-related customizations
   - Exports: Hook for managing custom order data transformations
   - Dependencies: React hooks (useState, useEffect)
 
 #### Epicor Order ID Display
+
 - **Business Requirement**: Display Epicor order ID instead of BigCommerce order ID
   - Field Source: `extraFields` array in order response
-  - Field Name: `epicoreOrderId`
+  - Field Name: `epicorOrderId`
   - Implementation: Extracted via `useOrderCustomizations` hook
   - Fallback: Shows BigCommerce order ID if Epicor ID not available
-  
 - **Modified Files**:
   - `index.tsx`: Added `orderData` state, integrated customization hook
   - Line 95: Added `OrderData` type for order state
@@ -63,7 +68,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Technical Details**:
   - Hook accepts raw order object with `extraFields` array
   - Returns `getDisplayOrderId()` function that prioritizes Epicor ID
-  - Returns `epicoreOrderId` string for direct access
+  - Returns `epicorOrderId` string for direct access
   - Updates automatically when order data changes
 
 ### Changed
@@ -91,6 +96,7 @@ When adding customizations, document them here using this format:
 ## [X.Y.Z] - YYYY-MM-DD
 
 ### Added
+
 - **Feature Name**
   - Business Requirement: Why this was needed
   - Implementation: How it was done
@@ -98,18 +104,23 @@ When adding customizations, document them here using this format:
   - Technical Details: Important notes
 
 ### Changed
+
 - What was modified and why
 
 ### Deprecated
+
 - Features that are being phased out
 
 ### Removed
+
 - Features that were removed
 
 ### Fixed
+
 - Bug fixes
 
 ### Security
+
 - Security-related changes
 ```
 
@@ -139,29 +150,35 @@ Use these categories when documenting changes:
 
 ## Template for New Customizations
 
-```markdown
+````markdown
 ### [Category] - Customization Name
 
-**Business Requirement**: 
+**Business Requirement**:
 [Explain why this was needed from a business perspective]
 
 **Technical Implementation**:
+
 - Hook/Function: [Name of function or hook]
 - Data Source: [Where the data comes from]
 - Files Modified: [List of files changed]
 - Dependencies: [Any new dependencies added]
 
 **Usage Example**:
+
 ```tsx
 // Example code showing how to use this customization
 ```
+````
 
 **Testing Notes**:
+
 - [How to test this customization]
 - [Edge cases to consider]
 
 **Migration Notes** (if applicable):
+
 - [Any notes for upgrading from previous versions]
+
 ```
 
 ---
@@ -199,3 +216,4 @@ For questions about customizations or to propose new ones:
 - 📝 Documentation update
 - 🔧 Configuration change
 - ⚡ Performance improvement
+```
