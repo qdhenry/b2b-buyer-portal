@@ -292,7 +292,7 @@ function Order({ isCompanyOrder = false }: OrderProps) {
     // and epicorOrderId second (for user-friendly URL display)
     const itemWithExtraFields = {
       ...item,
-      extraFields: extraFieldsMap[item.orderId] || item.extraFields,
+      extraFields: activeExtraFieldsMap[item.orderId] || item.extraFields,
     };
     const epicorId = getEpicorOrderId(itemWithExtraFields);
 
