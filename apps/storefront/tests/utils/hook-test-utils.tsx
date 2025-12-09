@@ -1,6 +1,7 @@
 import { ComponentProps, PropsWithChildren, Suspense, useContext, useEffect } from 'react';
 import { Provider } from 'react-redux';
 import { MemoryRouter, useLocation } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderHook, RenderHookOptions } from '@testing-library/react';
 import { Mock } from 'vitest';
 
@@ -38,6 +39,21 @@ function MockGlobalProvider({ payload }: { payload: Partial<GlobalState> }) {
   return null;
 }
 
+const getMockQueryClient = (): QueryClient =>
+  new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+        retryDelay: 0,
+        gcTime: Infinity,
+        refetchOnWindowFocus: false,
+        refetchOnReconnect: false,
+        staleTime: 0,
+        refetchInterval: false,
+      },
+    },
+  });
+
 export const renderHookWithProviders = <Result, Props>(
   hook: (initialProps: Props) => Result,
   options: Partial<ExtendedRenderHookOptions<Props>> = {},
@@ -51,24 +67,27 @@ export const renderHookWithProviders = <Result, Props>(
   } = options;
 
   vi.spyOn(storeModule, 'store', 'get').mockReturnValue(store);
+  const queryClient = getMockQueryClient();
   const navigation = vi.fn();
 
   function Wrapper({ children }: PropsWithChildren) {
     return (
       <Suspense fallback="test-loading">
-        <GlobalProvider>
-          <MockGlobalProvider payload={initialGlobalContext} />
-          <Provider store={store}>
-            <LangProvider>
-              <DynamicallyVariableProvider>
-                <B3LayoutTip />
-                <MemoryRouter initialEntries={initialEntries}>
-                  <NavigationSpy spy={navigation}>{children}</NavigationSpy>
-                </MemoryRouter>
-              </DynamicallyVariableProvider>
-            </LangProvider>
-          </Provider>
-        </GlobalProvider>
+        <QueryClientProvider client={queryClient}>
+          <GlobalProvider>
+            <MockGlobalProvider payload={initialGlobalContext} />
+            <Provider store={store}>
+              <LangProvider>
+                <DynamicallyVariableProvider>
+                  <B3LayoutTip />
+                  <MemoryRouter initialEntries={initialEntries}>
+                    <NavigationSpy spy={navigation}>{children}</NavigationSpy>
+                  </MemoryRouter>
+                </DynamicallyVariableProvider>
+              </LangProvider>
+            </Provider>
+          </GlobalProvider>
+        </QueryClientProvider>
       </Suspense>
     );
   }
