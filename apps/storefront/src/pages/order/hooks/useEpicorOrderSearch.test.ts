@@ -3,7 +3,8 @@ import { renderHookWithProviders } from 'tests/utils/hook-test-utils';
 import { vi } from 'vitest';
 
 import * as ordersModule from '../../customizations/graphql/orders';
-import { CompanyOrderNode } from '../../customizations/graphql/orders';
+import { CompanyOrderNode, ExtraField } from '../../customizations/graphql/orders';
+
 import { useEpicorOrderSearch } from './useEpicorOrderSearch';
 
 // Mock the orders module
@@ -20,7 +21,7 @@ describe('useEpicorOrderSearch', () => {
     typeof vi.fn
   >;
 
-  const createMockOrder = (orderId: string, epicorId: string): CompanyOrderNode => ({
+  const createMockOrder = (orderId: string, _epicorId: string): CompanyOrderNode => ({
     node: {
       orderId,
       createdAt: 1699900000,
@@ -40,7 +41,10 @@ describe('useEpicorOrderSearch', () => {
     },
   });
 
-  const createMockResponse = (orders: CompanyOrderNode[], extraFieldsMap: Record<string, any>) => ({
+  const createMockResponse = (
+    orders: CompanyOrderNode[],
+    extraFieldsMap: Record<string, ExtraField[]>,
+  ) => ({
     edges: orders,
     totalCount: orders.length,
     extraFieldsMap,
@@ -64,9 +68,7 @@ describe('useEpicorOrderSearch', () => {
     });
 
     it('fetches when epicorSearchTerm is provided', async () => {
-      mockGetAllOrdersWithExtraFields.mockResolvedValue(
-        createMockResponse([], {}),
-      );
+      mockGetAllOrdersWithExtraFields.mockResolvedValue(createMockResponse([], {}));
 
       renderHookWithProviders(() => useEpicorOrderSearch(123, 'EP-1001'));
 
@@ -94,9 +96,7 @@ describe('useEpicorOrderSearch', () => {
         '102': [{ fieldName: 'epicorOrderId', fieldValue: 'EP-1003' }],
       };
 
-      mockGetAllOrdersWithExtraFields.mockResolvedValue(
-        createMockResponse(orders, extraFieldsMap),
-      );
+      mockGetAllOrdersWithExtraFields.mockResolvedValue(createMockResponse(orders, extraFieldsMap));
 
       const { result } = renderHookWithProviders(() => useEpicorOrderSearch(123, 'EP-1'));
 
@@ -123,9 +123,7 @@ describe('useEpicorOrderSearch', () => {
         '102': [{ fieldName: 'epicorOrderId', fieldValue: 'Ep-1003' }],
       };
 
-      mockGetAllOrdersWithExtraFields.mockResolvedValue(
-        createMockResponse(orders, extraFieldsMap),
-      );
+      mockGetAllOrdersWithExtraFields.mockResolvedValue(createMockResponse(orders, extraFieldsMap));
 
       const { result } = renderHookWithProviders(() => useEpicorOrderSearch(123, 'ep-1'));
 
@@ -138,19 +136,14 @@ describe('useEpicorOrderSearch', () => {
     });
 
     it('returns empty array when no matches found', async () => {
-      const orders = [
-        createMockOrder('100', 'EP-1001'),
-        createMockOrder('101', 'EP-2002'),
-      ];
+      const orders = [createMockOrder('100', 'EP-1001'), createMockOrder('101', 'EP-2002')];
 
       const extraFieldsMap = {
         '100': [{ fieldName: 'epicorOrderId', fieldValue: 'EP-1001' }],
         '101': [{ fieldName: 'epicorOrderId', fieldValue: 'EP-2002' }],
       };
 
-      mockGetAllOrdersWithExtraFields.mockResolvedValue(
-        createMockResponse(orders, extraFieldsMap),
-      );
+      mockGetAllOrdersWithExtraFields.mockResolvedValue(createMockResponse(orders, extraFieldsMap));
 
       const { result } = renderHookWithProviders(() => useEpicorOrderSearch(123, 'XYZ'));
 
@@ -167,9 +160,7 @@ describe('useEpicorOrderSearch', () => {
         '100': [{ fieldName: 'epicorOrderId', fieldValue: 'EP-1001' }],
       };
 
-      mockGetAllOrdersWithExtraFields.mockResolvedValue(
-        createMockResponse(orders, extraFieldsMap),
-      );
+      mockGetAllOrdersWithExtraFields.mockResolvedValue(createMockResponse(orders, extraFieldsMap));
 
       const { result } = renderHookWithProviders(() => useEpicorOrderSearch(123, ''));
 
@@ -190,9 +181,7 @@ describe('useEpicorOrderSearch', () => {
         '102': [{ fieldName: 'epicorOrderId', fieldValue: 'EP-1002' }],
       };
 
-      mockGetAllOrdersWithExtraFields.mockResolvedValue(
-        createMockResponse(orders, extraFieldsMap),
-      );
+      mockGetAllOrdersWithExtraFields.mockResolvedValue(createMockResponse(orders, extraFieldsMap));
 
       const { result } = renderHookWithProviders(() => useEpicorOrderSearch(123, 'EP-1'));
 
@@ -207,18 +196,17 @@ describe('useEpicorOrderSearch', () => {
 
   describe('progress callbacks', () => {
     it('calls progress callback during data fetching', async () => {
-      let progressCallback: ((fetched: number, total: number) => void) | undefined;
+      mockGetAllOrdersWithExtraFields.mockImplementation(
+        async (_companyId, _filters, onProgress) => {
 
-      mockGetAllOrdersWithExtraFields.mockImplementation(async (_companyId, _filters, onProgress) => {
-        progressCallback = onProgress;
+          // Simulate progress updates
+          onProgress?.(100, 500);
+          onProgress?.(250, 500);
+          onProgress?.(500, 500);
 
-        // Simulate progress updates
-        onProgress?.(100, 500);
-        onProgress?.(250, 500);
-        onProgress?.(500, 500);
-
-        return createMockResponse([], {});
-      });
+          return createMockResponse([], {});
+        },
+      );
 
       const { result } = renderHookWithProviders(() => useEpicorOrderSearch(123, 'EP-1'));
 
@@ -231,11 +219,13 @@ describe('useEpicorOrderSearch', () => {
     });
 
     it('updates progress state during fetching', async () => {
-      mockGetAllOrdersWithExtraFields.mockImplementation(async (_companyId, _filters, onProgress) => {
-        // Simulate incremental progress
-        onProgress?.(100, 1000);
-        return createMockResponse([], {});
-      });
+      mockGetAllOrdersWithExtraFields.mockImplementation(
+        async (_companyId, _filters, onProgress) => {
+          // Simulate incremental progress
+          onProgress?.(100, 1000);
+          return createMockResponse([], {});
+        },
+      );
 
       const { result } = renderHookWithProviders(() => useEpicorOrderSearch(123, 'EP-1'));
 
@@ -245,10 +235,12 @@ describe('useEpicorOrderSearch', () => {
     });
 
     it('resets progress when query is disabled', async () => {
-      mockGetAllOrdersWithExtraFields.mockImplementation(async (_companyId, _filters, onProgress) => {
-        onProgress?.(100, 100);
-        return createMockResponse([], {});
-      });
+      mockGetAllOrdersWithExtraFields.mockImplementation(
+        async (_companyId, _filters, onProgress) => {
+          onProgress?.(100, 100);
+          return createMockResponse([], {});
+        },
+      );
 
       const { result } = renderHookWithProviders(
         ({ searchTerm }: { searchTerm: string }) => useEpicorOrderSearch(123, searchTerm),
@@ -277,13 +269,9 @@ describe('useEpicorOrderSearch', () => {
         '100': [{ fieldName: 'epicorOrderId', fieldValue: 'EP-1001' }],
       };
 
-      mockGetAllOrdersWithExtraFields.mockResolvedValue(
-        createMockResponse(orders, extraFieldsMap),
-      );
+      mockGetAllOrdersWithExtraFields.mockResolvedValue(createMockResponse(orders, extraFieldsMap));
 
-      const { result } = renderHookWithProviders(() =>
-        useEpicorOrderSearch(123, 'EP-1'),
-      );
+      const { result } = renderHookWithProviders(() => useEpicorOrderSearch(123, 'EP-1'));
 
       await waitFor(() => {
         expect(result.result.current.isLoadingAllOrders).toBe(false);
@@ -334,9 +322,7 @@ describe('useEpicorOrderSearch', () => {
         '100': [{ fieldName: 'epicorOrderId', fieldValue: 'EP-1001' }],
       };
 
-      mockGetAllOrdersWithExtraFields.mockResolvedValue(
-        createMockResponse(orders, extraFieldsMap),
-      );
+      mockGetAllOrdersWithExtraFields.mockResolvedValue(createMockResponse(orders, extraFieldsMap));
 
       const { result } = renderHookWithProviders(() => useEpicorOrderSearch(123, 'EP-1'));
 
@@ -364,9 +350,7 @@ describe('useEpicorOrderSearch', () => {
         ],
       };
 
-      mockGetAllOrdersWithExtraFields.mockResolvedValue(
-        createMockResponse(orders, extraFieldsMap),
-      );
+      mockGetAllOrdersWithExtraFields.mockResolvedValue(createMockResponse(orders, extraFieldsMap));
 
       const { result } = renderHookWithProviders(() => useEpicorOrderSearch(123, 'EP-1'));
 
@@ -384,16 +368,17 @@ describe('useEpicorOrderSearch', () => {
       const extraFieldsMap = orders.reduce(
         (acc, order) => {
           acc[order.node.orderId!] = [
-            { fieldName: 'epicorOrderId', fieldValue: `EP-${1000 + parseInt(order.node.orderId!) - 100}` },
+            {
+              fieldName: 'epicorOrderId',
+              fieldValue: `EP-${1000 + parseInt(order.node.orderId!, 10) - 100}`,
+            },
           ];
           return acc;
         },
-        {} as Record<string, any>,
+        {} as Record<string, ExtraField[]>,
       );
 
-      mockGetAllOrdersWithExtraFields.mockResolvedValue(
-        createMockResponse(orders, extraFieldsMap),
-      );
+      mockGetAllOrdersWithExtraFields.mockResolvedValue(createMockResponse(orders, extraFieldsMap));
 
       const { result } = renderHookWithProviders(() => useEpicorOrderSearch(123, 'EP-1'));
 

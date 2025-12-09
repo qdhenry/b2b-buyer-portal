@@ -25,7 +25,9 @@ import {
   getOrderStatusType,
 } from '../customizations';
 
+import EpicorSearchInput from './components/EpicorSearchInput';
 import OrderStatus from './components/OrderStatus';
+import { useEpicorOrderSearch } from './hooks/useEpicorOrderSearch';
 import { orderStatusTranslationVariables } from './shared/getOrderStatus';
 import { B3Table, PossibleNodeWrapper, TableColumnItem } from './table/B3Table';
 import {
@@ -38,8 +40,6 @@ import {
   sortKeys,
 } from './config';
 import { OrderItemCard } from './OrderItemCard';
-import { useEpicorOrderSearch } from './hooks/useEpicorOrderSearch';
-import EpicorSearchInput from './components/EpicorSearchInput';
 
 interface CompanyInfoProps {
   companyId: string;
@@ -165,6 +165,12 @@ function Order({ isCompanyOrder = false }: OrderProps) {
     epicorFilteredResults,
     extraFieldsMap: epicorExtraFieldsMap,
   } = useEpicorOrderSearch(Number(selectedCompanyId), epicorSearchTerm);
+
+  // STATLAB CUSTOMIZATION: Disable normal pagination query when Epicor search is active
+  const isEpicorSearchActive = Boolean(epicorSearchTerm && epicorSearchTerm.trim());
+
+  // STATLAB CUSTOMIZATION: Use appropriate extraFieldsMap based on search mode
+  const activeExtraFieldsMap = isEpicorSearchActive ? epicorExtraFieldsMap : extraFieldsMap;
 
   const handleSetOrderBy = (key: string) => {
     setOrderBy((prev) => {
@@ -447,9 +453,6 @@ function Order({ isCompanyOrder = false }: OrderProps) {
     }));
   };
 
-  // STATLAB CUSTOMIZATION: Disable normal pagination query when Epicor search is active
-  const isEpicorSearchActive = Boolean(epicorSearchTerm && epicorSearchTerm.trim());
-
   const { data, isFetching } = useQuery({
     queryKey: ['orderList', filterData, pagination, orderBy],
     enabled: Boolean(filterData) && !isEpicorSearchActive,
@@ -466,9 +469,6 @@ function Order({ isCompanyOrder = false }: OrderProps) {
         totalCount: epicorFilteredResults.length,
       }
     : data;
-
-  // STATLAB CUSTOMIZATION: Use appropriate extraFieldsMap based on search mode
-  const activeExtraFieldsMap = isEpicorSearchActive ? epicorExtraFieldsMap : extraFieldsMap;
 
   // STATLAB CUSTOMIZATION: Clear epicor search handler
   const handleClearEpicorSearch = () => {
