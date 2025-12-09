@@ -38,6 +38,8 @@ import {
   sortKeys,
 } from './config';
 import { OrderItemCard } from './OrderItemCard';
+import { useEpicorOrderSearch } from './hooks/useEpicorOrderSearch';
+import EpicorSearchInput from './components/EpicorSearchInput';
 
 interface CompanyInfoProps {
   companyId: string;
@@ -148,10 +150,21 @@ function Order({ isCompanyOrder = false }: OrderProps) {
   // STATLAB CUSTOMIZATION: Store enriched extra fields
   const [extraFieldsMap, setExtraFieldsMap] = useState<Record<string, ExtraField[]>>({});
 
+  // STATLAB CUSTOMIZATION: Epicor Order ID search state
+  const [epicorSearchTerm, setEpicorSearchTerm] = useState('');
+
   const [orderBy, setOrderBy] = useState<OrderBy>({
     key: 'orderId',
     dir: 'desc',
   });
+
+  // STATLAB CUSTOMIZATION: Epicor Order ID search hook
+  const {
+    isLoadingAllOrders,
+    loadingProgress,
+    epicorFilteredResults,
+    extraFieldsMap: epicorExtraFieldsMap,
+  } = useEpicorOrderSearch(Number(selectedCompanyId), epicorSearchTerm);
 
   const handleSetOrderBy = (key: string) => {
     setOrderBy((prev) => {
@@ -313,7 +326,7 @@ function Order({ isCompanyOrder = false }: OrderProps) {
         // STATLAB CUSTOMIZATION: Display Epicor Order ID
         const itemWithExtraFields = {
           ...item,
-          extraFields: extraFieldsMap[item.orderId] || item.extraFields,
+          extraFields: activeExtraFieldsMap[item.orderId] || item.extraFields,
         };
         return getEpicorOrderId(itemWithExtraFields) || item.orderId;
       },
@@ -434,14 +447,36 @@ function Order({ isCompanyOrder = false }: OrderProps) {
     }));
   };
 
+  // STATLAB CUSTOMIZATION: Disable normal pagination query when Epicor search is active
+  const isEpicorSearchActive = Boolean(epicorSearchTerm && epicorSearchTerm.trim());
+
   const { data, isFetching } = useQuery({
     queryKey: ['orderList', filterData, pagination, orderBy],
-    enabled: Boolean(filterData),
+    enabled: Boolean(filterData) && !isEpicorSearchActive,
     queryFn: () => fetchList({ ...filterData, ...pagination, orderBy: getOrderBy(orderBy) }),
   });
 
+  // STATLAB CUSTOMIZATION: Swap data source based on search mode
+  const displayData = isEpicorSearchActive
+    ? {
+        edges: epicorFilteredResults.map((edge) => ({
+          ...edge.node,
+          companyName: edge.node.companyInfo?.companyName || '',
+        })) as unknown as ListItem[],
+        totalCount: epicorFilteredResults.length,
+      }
+    : data;
+
+  // STATLAB CUSTOMIZATION: Use appropriate extraFieldsMap based on search mode
+  const activeExtraFieldsMap = isEpicorSearchActive ? epicorExtraFieldsMap : extraFieldsMap;
+
+  // STATLAB CUSTOMIZATION: Clear epicor search handler
+  const handleClearEpicorSearch = () => {
+    setEpicorSearchTerm('');
+  };
+
   return (
-    <B3Spin isSpinning={isFetching}>
+    <B3Spin isSpinning={isFetching || isLoadingAllOrders}>
       <Box
         sx={{
           display: 'flex',
@@ -490,16 +525,27 @@ function Order({ isCompanyOrder = false }: OrderProps) {
           />
         </Box>
 
+        {/* STATLAB CUSTOMIZATION: Epicor Order ID search */}
+        {isB2BUser && (
+          <EpicorSearchInput
+            value={epicorSearchTerm}
+            onChange={setEpicorSearchTerm}
+            onClear={handleClearEpicorSearch}
+            isLoading={isLoadingAllOrders}
+            loadingProgress={loadingProgress}
+          />
+        )}
+
         <B3Table
           columnItems={columnItems}
-          listItems={data?.edges || []}
-          pagination={{ ...pagination, count: data?.totalCount || 0 }}
+          listItems={displayData?.edges || []}
+          pagination={{ ...pagination, count: displayData?.totalCount || 0 }}
           onPaginationChange={setPagination}
           isInfiniteScroll={isMobile}
           renderItem={(row, index) => {
             const itemWithExtraFields = {
               ...row,
-              extraFields: extraFieldsMap[row.orderId] || row.extraFields,
+              extraFields: activeExtraFieldsMap[row.orderId] || row.extraFields,
             };
             return (
               <OrderItemCard
