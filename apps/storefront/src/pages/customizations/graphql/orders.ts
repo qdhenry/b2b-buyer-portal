@@ -471,3 +471,105 @@ export const getB2BAllOrdersREST = async (
     };
   }
 };
+
+// Constants for batch fetching all orders
+const ORDERS_PAGE_SIZE = 100;
+const CONCURRENT_REQUESTS = 5;
+
+/**
+ * Fetches ALL orders with extra fields for a company in batches.
+ * Useful for client-side filtering by extraFields (e.g., epicorOrderId).
+ *
+ * @param companyId - Company ID to fetch orders for
+ * @param filters - Optional filters to apply (status, dates, etc.)
+ * @param onProgress - Callback for progress updates (fetchedCount, totalCount)
+ * @returns All orders with extraFieldsMap
+ */
+export const getAllOrdersWithExtraFields = async (
+  companyId: number,
+  filters?: Partial<CustomFieldItems>,
+  onProgress?: (fetched: number, total: number) => void,
+): Promise<{
+  edges: CompanyOrderNode[];
+  totalCount: number;
+  extraFieldsMap: Record<string, ExtraField[]>;
+}> => {
+  try {
+    // Step 1: Fetch first page to get total count
+    const initialData: CustomFieldItems = {
+      first: ORDERS_PAGE_SIZE,
+      offset: 0,
+      orderBy: '-createdAt',
+      companyIds: [companyId],
+      ...filters,
+    };
+
+    const firstPage = await getB2BAllOrdersREST(initialData);
+    const { totalCount } = firstPage;
+
+    // If total count is 0 or first page failed, return early
+    if (totalCount === 0) {
+      onProgress?.(0, 0);
+      return firstPage;
+    }
+
+    // Calculate number of pages needed
+    const totalPages = Math.ceil(totalCount / ORDERS_PAGE_SIZE);
+
+    // Report initial progress
+    onProgress?.(firstPage.edges.length, totalCount);
+
+    // If only one page, return immediately
+    if (totalPages === 1) {
+      return firstPage;
+    }
+
+    // Step 2: Fetch remaining pages in parallel batches
+    const allEdges: CompanyOrderNode[] = [...firstPage.edges];
+    const allExtraFieldsMap: Record<string, ExtraField[]> = { ...firstPage.extraFieldsMap };
+
+    // Create array of page numbers to fetch (skip first page since we already have it)
+    const remainingPages = Array.from({ length: totalPages - 1 }, (_, i) => i + 1);
+
+    // Process pages in batches to respect rate limits
+    for (let i = 0; i < remainingPages.length; i += CONCURRENT_REQUESTS) {
+      const batch = remainingPages.slice(i, i + CONCURRENT_REQUESTS);
+
+      // Fetch batch in parallel
+      const batchPromises = batch.map((pageNum) => {
+        const pageData: CustomFieldItems = {
+          first: ORDERS_PAGE_SIZE,
+          offset: pageNum * ORDERS_PAGE_SIZE,
+          orderBy: '-createdAt',
+          companyIds: [companyId],
+          ...filters,
+        };
+        return getB2BAllOrdersREST(pageData);
+      });
+
+      const batchResults = await Promise.all(batchPromises);
+
+      // Merge results
+      batchResults.forEach((result) => {
+        allEdges.push(...result.edges);
+        Object.assign(allExtraFieldsMap, result.extraFieldsMap);
+      });
+
+      // Report progress after each batch
+      onProgress?.(allEdges.length, totalCount);
+    }
+
+    return {
+      edges: allEdges,
+      totalCount,
+      extraFieldsMap: allExtraFieldsMap,
+    };
+  } catch (error) {
+    b2bLogger.error('Failed to fetch all orders with extra fields:', error);
+    return {
+      edges: [],
+      totalCount: 0,
+      extraFieldsMap: {},
+    };
+  }
+};
