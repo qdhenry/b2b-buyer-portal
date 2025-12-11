@@ -29,14 +29,12 @@ jobs:
     displayName: 'Install Node.js 22'
   - script: yarn install
     displayName: 'Install dependencies'
-  - script: node -v
-    displayName: 'Check Node.js version'  
   - script: yarn build
     displayName: 'Build application with Turbo'
   - task: AzureStaticWebApp@0
     inputs:
       azure_static_web_apps_api_token: $(AZURE_STATIC_WEB_APPS_API_TOKEN_THANKFUL_MUD_037637B10)
-      app_location: "apps/storefront"
+      app_location: "apps/storefront/dist"
       api_location: ""
       output_location: "apps/storefront/dist"
       skip_app_build: true
