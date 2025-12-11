@@ -37,5 +37,5 @@ jobs:
       app_location: "apps/storefront"
       api_location: ""
       output_location: "apps/storefront"
-      skip_app_build: true
+      #skip_app_build: true
     displayName: 'Deploy to Azure Static Web Apps'
