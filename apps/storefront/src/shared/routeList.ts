@@ -104,7 +104,7 @@ export const routeList: (BuyerPortalRoute | RouteItem)[] = [
     name: 'Invoice',
     subsidiariesCompanyKey: 'invoice',
     wsKey: 'invoice',
-    isMenuItem: true,
+    isMenuItem: false,
     configKey: 'invoice',
     permissions: invoicePermissions,
     permissionCodes: invoicePermissionCodes,

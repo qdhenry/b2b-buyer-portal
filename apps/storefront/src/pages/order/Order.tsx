@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Box } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 
-import B3Filter from '@/components/filter/B3Filter';
+// STATLAB CUSTOMIZATION: B3Filter hidden - import kept for potential future use
+// import B3Filter from '@/components/filter/B3Filter';
 import B3Spin from '@/components/spin/B3Spin';
 import { B2BAutoCompleteCheckbox } from '@/components/ui/B2BAutoCompleteCheckbox';
 import { useMobile } from '@/hooks/useMobile';
@@ -360,7 +361,7 @@ function Order({ isCompanyOrder = false }: OrderProps) {
       render: ({ status }) => (
         <OrderStatus text={getOrderStatusText(status, getOrderStatuses)} code={status} />
       ),
-      width: '10%',
+      width: '12%',
       isSortable: true,
     },
     {
@@ -374,7 +375,7 @@ function Order({ isCompanyOrder = false }: OrderProps) {
       key: 'createdAt',
       title: b3Lang('orders.createdOn'),
       render: ({ createdAt }) => `${displayFormat(Number(createdAt))}`,
-      width: '10%',
+      width: '8%',
       isSortable: true,
     },
   ] as const satisfies TableColumnItem<ListItem>[];
@@ -468,26 +469,7 @@ function Order({ isCompanyOrder = false }: OrderProps) {
               <B2BAutoCompleteCheckbox handleChangeCompanyIds={handleSelectCompanies} />
             </Box>
           )}
-          <B3Filter
-            startPicker={{
-              isEnabled: true,
-              label: b3Lang('orders.from'),
-              defaultValue: filterData?.beginDateAt || null,
-              pickerKey: 'start',
-            }}
-            endPicker={{
-              isEnabled: true,
-              label: b3Lang('orders.to'),
-              defaultValue: filterData?.endDateAt || null,
-              pickerKey: 'end',
-            }}
-            filterMoreInfo={filterInfo}
-            handleChange={handleChange}
-            handleFilterChange={handleFilterChange}
-            pcTotalWidth="100%"
-            pcContainerWidth="100%"
-            pcSearchContainerWidth="100%"
-          />
+          {/* STATLAB CUSTOMIZATION: Search bar and filter button hidden per business requirements */}
         </Box>
 
         <B3Table
