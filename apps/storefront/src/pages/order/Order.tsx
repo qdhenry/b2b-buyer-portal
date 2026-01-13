@@ -67,14 +67,6 @@ interface ListItem {
   extraFields?: ExtraField[];
 }
 
-interface SearchChangeProps {
-  startValue?: string;
-  endValue?: string;
-  PlacedBy?: string;
-  orderStatus?: string | number;
-  company?: string;
-}
-
 interface OrderProps {
   isCompanyOrder?: boolean;
 }
@@ -173,6 +165,7 @@ function Order({ isCompanyOrder = false }: OrderProps) {
   };
 
   useEffect(() => {
+
     const search = isB2BUser
       ? getCompanyInitFilter(isCompanyOrder, selectedCompanyId)
       : getCustomerInitFilter();
@@ -393,35 +386,6 @@ function Order({ isCompanyOrder = false }: OrderProps) {
     });
 
     return getNewColumnItems;
-  };
-
-  const handleChange = (key: string, value: string) => {
-    if (key === 'search') {
-      setFilterData((data) => ({
-        ...data,
-        q: value,
-      }));
-    }
-  };
-
-  const handleFilterChange = (value: SearchChangeProps) => {
-    let currentStatus = value?.orderStatus || '';
-    if (currentStatus) {
-      const originStatus = getOrderStatuses.find(
-        (status) => status.customLabel === currentStatus || status.systemLabel === currentStatus,
-      );
-
-      currentStatus = originStatus?.systemLabel || currentStatus;
-    }
-
-    setFilterData((data) => ({
-      ...data,
-      beginDateAt: value?.startValue || null,
-      endDateAt: value?.endValue || null,
-      createdBy: value?.PlacedBy || '',
-      statusCode: currentStatus,
-      companyName: value?.company || '',
-    }));
   };
 
   const columnItems = getColumnItems();
