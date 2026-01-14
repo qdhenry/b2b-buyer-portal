@@ -10,8 +10,8 @@ import HierarchyDialog from '@/pages/CompanyHierarchy/components/HierarchyDialog
 import { GlobalContext } from '@/shared/global';
 import { isB2BUserSelector, rolePermissionSelector, useAppSelector } from '@/store';
 import { Address, MoneyFormat, OrderProductItem } from '@/types';
-import { verifyLevelPermission } from '@/utils/b3CheckPermissions/check';
-import { b2bPermissionsMap } from '@/utils/b3CheckPermissions/config';
+// import { verifyLevelPermission } from '@/utils/b3CheckPermissions/check';
+// import { b2bPermissionsMap } from '@/utils/b3CheckPermissions/config';
 import { currencyFormat, ordersCurrencyFormat } from '@/utils/b3CurrencyFormat';
 import { displayFormat } from '@/utils/b3DateFormat';
 import { b2bPrintInvoice } from '@/utils/b3PrintInvoice';
@@ -322,7 +322,7 @@ export function OrderAction(props: OrderActionProps) {
   const { detailsData, isCurrentCompany } = props;
   const b3Lang = useB3Lang();
   const isB2BUser = useAppSelector(isB2BUserSelector);
-  const emailAddress = useAppSelector(({ company }) => company.customer.emailAddress);
+  // const emailAddress = useAppSelector(({ company }) => company.customer.emailAddress);
   const role = useAppSelector(({ company }) => company.customer.role);
   const b2bPermissions = useAppSelector(rolePermissionSelector);
   const {
@@ -330,7 +330,7 @@ export function OrderAction(props: OrderActionProps) {
   } = useContext(GlobalContext);
 
   const {
-    state: { addressLabelPermission, createdEmail },
+    state: { addressLabelPermission },
   } = useContext(OrderDetailsContext);
 
   const {
@@ -343,7 +343,7 @@ export function OrderAction(props: OrderActionProps) {
     ipStatus = 0,
     invoiceId,
     poNumber,
-    customerId,
+    // customerId,
     companyInfo: { companyId } = {},
   } = detailsData;
 
@@ -369,12 +369,13 @@ export function OrderAction(props: OrderActionProps) {
   }
 
   const { purchasabilityPermission, shoppingListCreateActionsPermission } = b2bPermissions;
-  const { getInvoicesPermission } = b2bPermissionsMap;
-  const invoiceViewPermission = verifyLevelPermission({
-    code: getInvoicesPermission,
-    companyId: companyId ? Number(companyId) : 0,
-    userId: customerId ? Number(customerId) : 0,
-  });
+  //  const { getInvoicesPermission } = b2bPermissionsMap;
+
+  // const invoiceViewPermission = verifyLevelPermission({
+  //   code: getInvoicesPermission,
+  //   companyId: companyId ? Number(companyId) : 0,
+  //   userId: customerId ? Number(customerId) : 0,
+  // });
 
   const getCompanyName = (company: string) => {
     if (addressLabelPermission) {
@@ -478,7 +479,7 @@ export function OrderAction(props: OrderActionProps) {
     },
   ];
 
-  const invoiceBtnPermissions = Number(ipStatus) !== 0 || createdEmail === emailAddress;
+  // const invoiceBtnPermissions = Number(ipStatus) !== 0 || createdEmail === emailAddress;
 
   const orderData: OrderData[] = [
     {
@@ -503,15 +504,15 @@ export function OrderAction(props: OrderActionProps) {
       key: 'payment',
       subtitle: getPaymentMessage(),
       buttons: [
-        {
-          value: isB2BUser ? b3Lang('orderDetail.viewInvoice') : b3Lang('orderDetail.printInvoice'),
-          key: 'aboutInvoice',
-          name: isB2BUser ? 'viewInvoice' : 'printInvoice',
-          variant: 'outlined',
-          isCanShow: isB2BUser
-            ? invoiceBtnPermissions && invoiceViewPermission
-            : invoiceBtnPermissions,
-        },
+        // {
+        //   value: isB2BUser ? b3Lang('orderDetail.viewInvoice') : b3Lang('orderDetail.printInvoice'),
+        //   key: 'aboutInvoice',
+        //   name: isB2BUser ? 'viewInvoice' : 'printInvoice',
+        //   variant: 'outlined',
+        //   isCanShow: isB2BUser
+        //     ? invoiceBtnPermissions && invoiceViewPermission
+        //     : invoiceBtnPermissions,
+        // },
       ],
       infos: {
         info: getFullPaymentAddress(billingAddress),

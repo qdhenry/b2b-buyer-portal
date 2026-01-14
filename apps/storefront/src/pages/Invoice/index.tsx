@@ -486,7 +486,7 @@ function Invoice() {
   const isB2BUser = useAppSelector(isB2BUserSelector);
   const [extraFieldsMap, setExtraFieldsMap] = useState<Record<string, ExtraField[]>>({});
 
-      const fetchList: GetRequestList<Partial<FilterSearchProps>, InvoiceList> = async (params) => {
+  const fetchList: GetRequestList<Partial<FilterSearchProps>, InvoiceList> = async (params) => {
     const {
       invoices: { edges, totalCount },
     } = await getInvoiceList(params);
@@ -515,10 +515,7 @@ function Invoice() {
 
     if (companyIdsToFetch.length > 0) {
       try {
-        companyExtraFieldsMapData = await getCompaniesExtraFields(
-          companyIdsToFetch,
-          customerB2bId,
-        );
+        companyExtraFieldsMapData = await getCompaniesExtraFields(companyIdsToFetch, customerB2bId);
       } catch (e) {
         b2bLogger.error('Error fetching extra fields for companies', e);
       }
@@ -539,10 +536,11 @@ function Invoice() {
     });
 
     if (type === InvoiceListType.DETAIL && invoicesList.length) {
-          invoicesList.forEach((invoice: InvoiceListNode) => {
-            const item = invoice;
-            item.node.isCollapse = true;
-          });    }
+      invoicesList.forEach((invoice: InvoiceListNode) => {
+        const item = invoice;
+        item.node.isCollapse = true;
+      });
+    }
 
     invoicesList.forEach((invoiceNode: InvoiceListNode) => {
       const {
@@ -835,7 +833,6 @@ function Invoice() {
             row={actionRow}
             setInvoiceId={setCurrentInvoiceId}
             handleOpenHistoryModal={setIsOpenHistory}
-            setIsRequestLoading={setIsRequestLoading}
             isCurrentCompany={Number(currentCompanyId) === Number(companyInfo.companyId)}
             invoicePay={
               Number(currentCompanyId) === Number(companyInfo.companyId)
@@ -1033,7 +1030,6 @@ function Invoice() {
                 checkBox={checkBox}
                 handleSetSelectedInvoiceAccount={handleSetSelectedInvoiceAccountNumber}
                 handleViewInvoice={handleViewInvoice}
-                setIsRequestLoading={setIsRequestLoading}
                 setInvoiceId={setCurrentInvoiceId}
                 handleOpenHistoryModal={setIsOpenHistory}
                 selectedPay={selectedPay}

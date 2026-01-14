@@ -135,7 +135,8 @@ function Order({ isCompanyOrder = false }: OrderProps) {
 
   const [allTotal, setAllTotal] = useState(0);
   const [filterData, setFilterData] = useState<Partial<FilterSearchProps>>();
-  const [filterInfo, setFilterInfo] = useState<Array<any>>([]);
+
+  const [, setFilterInfo] = useState<Array<any>>([]);
   const [getOrderStatuses, setOrderStatuses] = useState<Array<any>>([]);
 
   // STATLAB CUSTOMIZATION: Store enriched extra fields
@@ -165,7 +166,6 @@ function Order({ isCompanyOrder = false }: OrderProps) {
   };
 
   useEffect(() => {
-
     const search = isB2BUser
       ? getCompanyInitFilter(isCompanyOrder, selectedCompanyId)
       : getCustomerInitFilter();

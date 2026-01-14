@@ -24,7 +24,6 @@ const StyledMenu = styled(Menu)(() => ({
 
 interface B3PulldownProps {
   row: InvoiceList;
-  setIsRequestLoading: (bool: boolean) => void;
   setInvoiceId: (id: string) => void;
   handleOpenHistoryModal: (bool: boolean) => void;
   isCurrentCompany: boolean;
@@ -33,7 +32,7 @@ interface B3PulldownProps {
 
 function B3Pulldown({
   row,
-  setIsRequestLoading: _setIsRequestLoading,
+
   setInvoiceId,
   handleOpenHistoryModal,
   isCurrentCompany,
@@ -169,15 +168,6 @@ function B3Pulldown({
           horizontal: 'right',
         }}
       >
-        <MenuItem
-          key="View-invoice"
-          sx={{
-            color: 'primary.main',
-          }}
-          onClick={() => handleViewInvoice()}
-        >
-          {b3Lang('invoice.actions.viewInvoice')}
-        </MenuItem>
         {isCanViewOrder && (
           <MenuItem
             key="View-Order"

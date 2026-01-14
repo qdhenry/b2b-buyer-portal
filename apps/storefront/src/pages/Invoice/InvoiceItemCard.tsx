@@ -19,7 +19,6 @@ interface InvoiceItemCardProps {
   checkBox?: (disable: boolean) => ReactElement;
   handleSetSelectedInvoiceAccount: (value: string, id: string) => void;
   handleViewInvoice: (id: string, status: string | number, invoiceCompanyId: string) => void;
-  setIsRequestLoading: (bool: boolean) => void;
   setInvoiceId: (id: string) => void;
   handleOpenHistoryModal: (bool: boolean) => void;
   selectedPay: CustomFieldItems | InvoiceListNode[];
@@ -42,7 +41,6 @@ export function InvoiceItemCard(props: InvoiceItemCardProps) {
     checkBox,
     handleSetSelectedInvoiceAccount,
     handleViewInvoice,
-    setIsRequestLoading,
     setInvoiceId,
     handleOpenHistoryModal,
     selectedPay = [],
@@ -252,7 +250,6 @@ export function InvoiceItemCard(props: InvoiceItemCardProps) {
               row={item}
               setInvoiceId={setInvoiceId}
               handleOpenHistoryModal={handleOpenHistoryModal}
-              setIsRequestLoading={setIsRequestLoading}
               isCurrentCompany={isCurrentCompany}
               invoicePay={invoicePay}
             />
