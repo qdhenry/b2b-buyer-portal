@@ -1,6 +1,6 @@
-import { Alert, Box, ImageListItem } from '@mui/material';
 import { useContext, useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom';
+import { Alert, Box, ImageListItem, Link, Typography } from '@mui/material';
 
 import b2bLogo from '@/assets/b2bLogo.png';
 import { B3Card } from '@/components/B3Card';
@@ -30,8 +30,8 @@ import { getCurrentCustomerInfo } from '@/utils/loginInfo';
 
 import { type PageProps } from '../PageProps';
 
-import { CatalystLogin } from './CatalystLogin';
 import LoginWidget from './component/LoginWidget';
+import { CatalystLogin } from './CatalystLogin';
 import { isLoginFlagType, loginCheckout, LoginConfig, loginType } from './config';
 import LoginForm from './LoginForm';
 import LoginPanel from './LoginPanel';
@@ -100,7 +100,6 @@ function Login(props: PageProps) {
   const {
     bottomHtmlRegionEnabled,
     bottomHtmlRegionHtml,
-    createAccountPanelHtml,
     topHtmlRegionEnabled,
     topHtmlRegionHtml,
   } = loginPageHtml;
@@ -111,7 +110,8 @@ function Login(props: PageProps) {
     createAccountButtonText: createAccountButtonText || b3Lang('login.button.createAccount'),
     btnColor: primaryButtonColor || '',
     widgetHeadText: topHtmlRegionEnabled ? topHtmlRegionHtml : undefined,
-    widgetBodyText: createAccountPanelHtml || defaultCreateAccountPanel,
+    // Verndale Customization: Always use the updated default content for New Customer section
+    widgetBodyText: defaultCreateAccountPanel,
     widgetFooterText: bottomHtmlRegionEnabled ? bottomHtmlRegionHtml : undefined,
     logo: displayStoreLogo ? logo : undefined,
   };
@@ -345,6 +345,43 @@ function Login(props: PageProps) {
                       />
                     </ImageListItem>
                   </LoginImage>
+                </Box>
+                {/* Password Reset Notice Banner */}
+                <Box
+                  sx={{
+                    padding: isMobile ? '16px' : '0 5%',
+                    marginBottom: '20px',
+                  }}
+                >
+                  <Alert
+                    severity="info"
+                    variant="filled"
+                    sx={{
+                      backgroundColor: '#003863',
+                      color: '#FFFFFF',
+                      '& .MuiAlert-message': { width: '100%' },
+                      '& .MuiAlert-icon': { color: '#FFFFFF' },
+                    }}
+                  >
+                    <Typography component="span" fontWeight="bold">
+                      Heads up!
+                    </Typography>{' '}
+                    We&apos;ve recently launched a new website, so you&apos;ll need to reset your
+                    password before signing in.
+                    <br />
+                    Don&apos;t worry—all of your order history and account information are still
+                    safely stored.
+                    <br />
+                    Simply click{' '}
+                    <Link
+                      component={RouterLink}
+                      to="/forgotPassword"
+                      sx={{ fontWeight: 'bold', color: '#E91E8C' }}
+                    >
+                      Reset Password
+                    </Link>{' '}
+                    to create a new one and regain access.
+                  </Alert>
                 </Box>
                 {loginInfo.widgetHeadText && (
                   <LoginWidget
