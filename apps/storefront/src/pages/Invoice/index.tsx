@@ -19,12 +19,12 @@ import { InvoiceList, InvoiceListNode } from '@/types/invoice';
 import { validatePermissionWithComparisonType } from '@/utils/b3CheckPermissions/check';
 import { b2bPermissionsMap } from '@/utils/b3CheckPermissions/config';
 import { currencyFormat, currencyFormatInfo } from '@/utils/b3CurrencyFormat';
-import { displayFormat, getUTCTimestamp } from '@/utils/b3DateFormat';
+import { displayFormat } from '@/utils/b3DateFormat';
 import b2bLogger from '@/utils/b3Logger';
 import { snackbar } from '@/utils/b3Tip';
 import { handleGetCorrespondingCurrencyToken } from '@/utils/currencyUtils';
 
-import B3Filter from '../../components/filter/B3Filter';
+// import B3Filter from '../../components/filter/B3Filter';
 import {
   ExtraField,
   getCompaniesExtraFields,
@@ -41,8 +41,6 @@ import PrintTemplate from './components/PrintTemplate';
 import InvoiceListType, {
   defaultSortKey,
   exportOrderByArr,
-  filterFormConfig,
-  filterFormConfigsTranslationVariables,
   sortIdArr,
 } from './utils/config';
 import { formattingNumericValues } from './utils/payment';
@@ -216,43 +214,43 @@ function Invoice() {
     }
   };
 
-  const handleChange = (key: string, value: string) => {
-    if (key === 'search') {
-      setFilterData({
-        ...filterData,
-        q: value,
-      });
-      setFilterChangeFlag(true);
-      setType(InvoiceListType.NORMAL);
-    }
-  };
+  // const handleChange = (key: string, value: string) => {
+  //   if (key === 'search') {
+  //     setFilterData({
+  //       ...filterData,
+  //       q: value,
+  //     });
+  //     setFilterChangeFlag(true);
+  //     setType(InvoiceListType.NORMAL);
+  //   }
+  // };
 
-  const handleFilterChange = (value: Partial<FilterSearchProps>) => {
-    const startValue = value?.startValue
-      ? getUTCTimestamp(new Date(value?.startValue).getTime() / 1000)
-      : '';
+  // const handleFilterChange = (value: Partial<FilterSearchProps>) => {
+  //   const startValue = value?.startValue
+  //     ? getUTCTimestamp(new Date(value?.startValue).getTime() / 1000)
+  //     : '';
 
-    const endValue = value?.endValue
-      ? getUTCTimestamp(new Date(value?.endValue).getTime() / 1000, true)
-      : '';
+  //   const endValue = value?.endValue
+  //     ? getUTCTimestamp(new Date(value?.endValue).getTime() / 1000, true)
+  //     : '';
 
-    const status = value?.status === 3 ? 0 : value?.status;
+  //   const status = value?.status === 3 ? 0 : value?.status;
 
-    const search: Partial<FilterSearchProps> = {
-      status: `${status}` || '',
-      beginDateAt: startValue,
-      endDateAt: endValue,
-      beginDueDateAt: value?.status === 0 ? parseInt(`${currentDate / 1000}`, 10) : '',
-      endDueDateAt: value?.status === 3 ? parseInt(`${currentDate / 1000}`, 10) : '',
-    };
+  //   const search: Partial<FilterSearchProps> = {
+  //     status: `${status}` || '',
+  //     beginDateAt: startValue,
+  //     endDateAt: endValue,
+  //     beginDueDateAt: value?.status === 0 ? parseInt(`${currentDate / 1000}`, 10) : '',
+  //     endDueDateAt: value?.status === 3 ? parseInt(`${currentDate / 1000}`, 10) : '',
+  //   };
 
-    setFilterData({
-      ...filterData,
-      ...search,
-    });
-    setFilterChangeFlag(true);
-    setType(InvoiceListType.NORMAL);
-  };
+  //   setFilterData({
+  //     ...filterData,
+  //     ...search,
+  //   });
+  //   setFilterChangeFlag(true);
+  //   setType(InvoiceListType.NORMAL);
+  // };
 
   const getSelectCheckbox = (selectCheckbox: Array<string | number>) => {
     if (selectCheckbox.length > 0) {
@@ -873,21 +871,21 @@ function Invoice() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [checkedArr, filterData, filterLists]);
 
-  const translatedFilterFormConfigs = filterFormConfig.map((element) => {
-    const config = element;
-    if (element.name === 'status') {
-      config.label = b3Lang(filterFormConfigsTranslationVariables.status);
-    }
+  // const translatedFilterFormConfigs = filterFormConfig.map((element) => {
+  //   const config = element;
+  //   if (element.name === 'status') {
+  //     config.label = b3Lang(filterFormConfigsTranslationVariables.status);
+  //   }
 
-    config.options = element.options.map((option) => {
-      const elementOption = option;
-      elementOption.label = b3Lang(filterFormConfigsTranslationVariables[option.key]);
+  //   config.options = element.options.map((option) => {
+  //     const elementOption = option;
+  //     elementOption.label = b3Lang(filterFormConfigsTranslationVariables[option.key]);
 
-      return option;
-    });
+  //     return option;
+  //   });
 
-    return element;
-  });
+  //   return element;
+  // });
 
   return (
     <B3Spin isSpinning={isRequestLoading}>
