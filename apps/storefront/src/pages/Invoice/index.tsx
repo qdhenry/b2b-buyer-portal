@@ -931,7 +931,7 @@ function Invoice() {
                 <B2BAutoCompleteCheckbox handleChangeCompanyIds={handleSelectCompanies} />
               </Box>
             )}
-            <B3Filter
+            {/* <B3Filter
               filterMoreInfo={translatedFilterFormConfigs}
               handleChange={handleChange}
               handleFilterChange={handleFilterChange}
@@ -956,7 +956,7 @@ function Invoice() {
               searchValue={filterData?.q || ''}
               pcContainerWidth="36rem"
               pcSearchContainerWidth="80%"
-            />
+            /> */}
           </Box>
           <Box
             sx={{

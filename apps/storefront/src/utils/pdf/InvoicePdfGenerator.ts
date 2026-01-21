@@ -272,7 +272,7 @@ export class InvoicePdfGenerator {
     const col3X = PAGE_MARGIN + 105;
 
     const companyExtraFields = this.invoice.companyInfo.extraFields || [];
-    console.log('companyExtraFields', companyExtraFields);
+
     const getCompanyExtraFieldValue = (fieldName: string) => {
       const field = companyExtraFields.find((item) => item.fieldName === fieldName);
       const value = field?.fieldValue;
