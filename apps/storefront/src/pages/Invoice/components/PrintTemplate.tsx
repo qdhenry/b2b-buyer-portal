@@ -34,10 +34,10 @@ function PrintTemplate({ row }: PrintTemplateProps) {
   };
 
   useEffect(() => {
-    const viewPrint = () => {
+    const viewPrint = async () => {
       setLoading(true);
       try {
-        const invoicePDFUrl = getInvoicePdfUrl(row);
+        const invoicePDFUrl = await getInvoicePdfUrl(row);
 
         if (container.current) {
           PDFObject.embed(invoicePDFUrl, container.current);

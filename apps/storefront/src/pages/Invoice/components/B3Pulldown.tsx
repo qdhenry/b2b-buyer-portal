@@ -62,11 +62,11 @@ function B3Pulldown({
     setIsOpen(true);
   };
 
-  const handleViewInvoice = () => {
+  const handleViewInvoice = async () => {
     close();
 
     try {
-      const pdfUrl = getInvoicePdfUrl(row);
+      const pdfUrl = await getInvoicePdfUrl(row);
       if (!pdfUrl) {
         snackbar.error('pdf url resolution error');
         return;
@@ -113,10 +113,10 @@ function B3Pulldown({
     handleOpenHistoryModal(true);
   };
 
-  const handleDownloadPDF = () => {
+  const handleDownloadPDF = async () => {
     close();
     try {
-      downloadInvoicePdf(row);
+      await downloadInvoicePdf(row);
     } catch (e) {
       snackbar.error('Error downloading PDF');
     }

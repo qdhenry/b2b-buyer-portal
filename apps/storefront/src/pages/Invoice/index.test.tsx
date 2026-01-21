@@ -556,7 +556,7 @@ it('opens the invoice in a new window when clicking on the invoice number', asyn
       ),
     );
 
-    vi.mocked(getInvoicePdfUrl).mockReturnValue(fakeBlobUrl);
+    vi.mocked(getInvoicePdfUrl).mockResolvedValue(fakeBlobUrl);
     vi.spyOn(window, 'open').mockImplementation(vi.fn());
 
     renderWithProviders(<Invoice />, { preloadedState });
@@ -593,7 +593,7 @@ it('can expand an invoice to look at its details', async () => {
       ),
     );
 
-    vi.mocked(getInvoicePdfUrl).mockReturnValue(fakeBlobUrl);
+    vi.mocked(getInvoicePdfUrl).mockResolvedValue(fakeBlobUrl);
 
     renderWithProviders(<Invoice />, { preloadedState });
 
@@ -778,7 +778,7 @@ describe('when using the action menu', () => {
       ),
     );
 
-    vi.mocked(getInvoicePdfUrl).mockReturnValue(fakeBlobUrl);
+    vi.mocked(getInvoicePdfUrl).mockResolvedValue(fakeBlobUrl);
     vi.spyOn(window, 'open').mockImplementation(vi.fn());
 
     renderWithProviders(<Invoice />, { preloadedState });
@@ -890,7 +890,7 @@ describe('when using the action menu', () => {
       ),
     );
 
-    vi.mocked(getInvoicePdfUrl).mockReturnValue(fakeBlobUrl);
+    vi.mocked(getInvoicePdfUrl).mockResolvedValue(fakeBlobUrl);
     vi.spyOn(window, 'open').mockImplementation(vi.fn());
 
     renderWithProviders(<Invoice />, { preloadedState });
@@ -1310,7 +1310,7 @@ describe('when the url contains an invoiceId parameter', () => {
         }),
       );
 
-    vi.mocked(getInvoicePdfUrl).mockReturnValue(fakeBlobUrl);
+    vi.mocked(getInvoicePdfUrl).mockResolvedValue(fakeBlobUrl);
 
     renderWithProviders(<Invoice />, {
       preloadedState,

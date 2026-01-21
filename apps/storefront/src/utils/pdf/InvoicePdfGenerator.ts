@@ -19,18 +19,71 @@ const COLOR_WHITE = '#FFFFFF';
 // Placeholder for missing data
 const MISSING_DATA_PLACEHOLDER = '---';
 
+// Logo URL
+const LOGO_URL =
+  'https://cdn11.bigcommerce.com/s-ujn2gplpvc/images/stencil/210x65/logo2x_1765213064__87900.original.png';
+
 export class InvoicePdfGenerator {
   private doc: jsPDF;
+
   private invoice: InvoiceData;
+
   private currentY: number = 0;
 
-  constructor(invoice: InvoiceData) {
+  private logoBase64: string | null = null;
+
+  constructor(invoice: InvoiceData, logoBase64?: string) {
     this.doc = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
       format: 'a4',
     });
     this.invoice = invoice;
+    this.logoBase64 = logoBase64 || null;
+  }
+
+  /**
+   * Loads the logo image and returns it as a base64 string
+   */
+  public static async loadLogo(): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0);
+          const base64 = canvas.toDataURL('image/png');
+          resolve(base64);
+        } else {
+          reject(new Error('Failed to get canvas context'));
+        }
+      };
+      img.onerror = () => reject(new Error('Failed to load logo image'));
+      img.src = LOGO_URL;
+    });
+  }
+
+  /**
+   * Draws the logo image in the top right corner
+   */
+  private drawLogo() {
+    const logoX = 155;
+    const logoY = 5;
+    const logoWidth = 45; // mm - adjust based on desired size
+    const logoHeight = 14; // mm - maintains approximate aspect ratio (210x65 -> ~3.23:1)
+
+    if (this.logoBase64) {
+      this.doc.addImage(this.logoBase64, 'PNG', logoX, logoY, logoWidth, logoHeight);
+    } else {
+      // Fallback to text if logo not loaded
+      this.doc.setFontSize(24);
+      this.doc.setFont('times', 'bold');
+      this.doc.text('StatLab', logoX + 10, logoY + 10);
+    }
   }
 
   public generate(): jsPDF {
@@ -107,20 +160,7 @@ export class InvoicePdfGenerator {
     this.doc.text('Page 1 of 2', centerX, centerY, { align: 'center' });
 
     // --- Right: LOGO ---
-    // Placeholder for Logo
-    const logoX = 150;
-    const logoY = 5;
-    this.doc.setFontSize(24);
-    this.doc.setFont('times', 'bold'); // Serif font for StatLab
-    this.doc.text('StatLab', logoX + 10, logoY + 10);
-    // Draw a primitive "flower/star" logo placeholder
-    this.doc.setDrawColor('#EC008C');
-    this.doc.setLineWidth(0.5);
-    this.doc.line(logoX, logoY + 5, logoX + 8, logoY + 15);
-    this.doc.line(logoX + 8, logoY + 5, logoX, logoY + 15);
-    this.doc.line(logoX + 4, logoY + 2, logoX + 4, logoY + 18);
-    this.doc.line(logoX - 2, logoY + 10, logoX + 10, logoY + 10);
-    this.doc.setDrawColor(0); // Reset
+    this.drawLogo();
 
     this.currentY = Math.max(y, centerY) + 10;
   }
@@ -526,19 +566,7 @@ export class InvoicePdfGenerator {
     this.doc.text('Page 2 of 2', 60, this.currentY + 15);
 
     // Logo
-    const logoX = 150;
-    const logoY = 5;
-    this.doc.setFontSize(24);
-    this.doc.setFont('times', 'bold');
-    this.doc.text('StatLab', logoX + 10, logoY + 10);
-    // Draw Logo Symbol (Simplified again)
-    this.doc.setDrawColor('#EC008C');
-    this.doc.setLineWidth(0.5);
-    this.doc.line(logoX, logoY + 5, logoX + 8, logoY + 15);
-    this.doc.line(logoX + 8, logoY + 5, logoX, logoY + 15);
-    this.doc.line(logoX + 4, logoY + 2, logoX + 4, logoY + 18);
-    this.doc.line(logoX - 2, logoY + 10, logoX + 10, logoY + 10);
-    this.doc.setDrawColor(0);
+    this.drawLogo();
 
     this.currentY += 30;
 
