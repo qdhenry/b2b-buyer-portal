@@ -239,6 +239,111 @@ export const getOrdersExtraFields = async (
   }
 };
 
+/**
+ * Fetches extra fields for a list of order IDs using true parallel individual requests.
+ * Each order ID gets its own HTTP request, all fired simultaneously.
+ * This can be faster than batched queries if the server handles concurrent requests well.
+ *
+ * @param ids Array of order IDs (strings or numbers)
+ * @param isB2BUser Boolean indicating if the user is a B2B user (affects query field name)
+ * @returns Promise resolving to a map of orderId -> ExtraField[]
+ */
+export const getOrdersExtraFieldsParallel = async (
+  ids: (string | number)[],
+  isB2BUser: boolean,
+): Promise<Record<string, ExtraField[]>> => {
+  if (!ids.length) return {};
+
+  const queryField = isB2BUser ? 'order' : 'customerOrder';
+
+  // Fire ALL requests simultaneously (true parallelism)
+  const promises = ids.map(async (id) => {
+    const query = `
+      query GetOrderExtraFields_${id} {
+        ${queryField}(id: ${id}) {
+          id
+          extraFields
+        }
+      }
+    `;
+
+    try {
+      const response = await B3Request.graphqlB2B({ query });
+      return {
+        id: String(id),
+        extraFields: response[queryField]?.extraFields || [],
+      };
+    } catch (error) {
+      b2bLogger.error(`Failed to fetch extraFields for order ${id}:`, error);
+      return { id: String(id), extraFields: [] };
+    }
+  });
+
+  const results = await Promise.all(promises);
+
+  return results.reduce(
+    (acc, { id, extraFields }) => {
+      acc[id] = extraFields;
+      return acc;
+    },
+    {} as Record<string, ExtraField[]>,
+  );
+};
+
+/**
+ * Fetches extra fields progressively - calls onProgress callback as each order's data arrives.
+ * This enables the UI to show each row's Epicor ID as soon as it's available.
+ *
+ * @param ids Array of order IDs (strings or numbers)
+ * @param isB2BUser Boolean indicating if the user is a B2B user
+ * @param onProgress Callback called with accumulated results as each order loads
+ * @returns Promise that resolves when all requests are complete
+ */
+export const getOrdersExtraFieldsProgressive = (
+  ids: (string | number)[],
+  isB2BUser: boolean,
+  onProgress: (accumulated: Record<string, ExtraField[]>) => void,
+): Promise<Record<string, ExtraField[]>> => {
+  if (!ids.length) {
+    onProgress({});
+    return Promise.resolve({});
+  }
+
+  const queryField = isB2BUser ? 'order' : 'customerOrder';
+  const accumulated: Record<string, ExtraField[]> = {};
+
+  // Fire ALL requests simultaneously, but update state as each completes
+  const promises = ids.map(async (id) => {
+    const query = `
+      query GetOrderExtraFields_${id} {
+        ${queryField}(id: ${id}) {
+          id
+          extraFields
+        }
+      }
+    `;
+
+    try {
+      const response = await B3Request.graphqlB2B({ query });
+      const extraFields = response[queryField]?.extraFields || [];
+
+      // Update accumulated results and notify
+      accumulated[String(id)] = extraFields;
+      onProgress({ ...accumulated });
+
+      return { id: String(id), extraFields };
+    } catch (error) {
+      b2bLogger.error(`Failed to fetch extraFields for order ${id}:`, error);
+      // Mark as loaded with empty array so UI knows it's done
+      accumulated[String(id)] = [];
+      onProgress({ ...accumulated });
+      return { id: String(id), extraFields: [] };
+    }
+  });
+
+  return Promise.all(promises).then(() => accumulated);
+};
+
 // Company info types for REST API
 export interface CompanyInfo {
   companyId: number;

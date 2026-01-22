@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Box } from '@mui/material';
+import { Box, Skeleton } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 
 // STATLAB CUSTOMIZATION: B3Filter hidden - import kept for potential future use
@@ -17,12 +17,12 @@ import b2bLogger from '@/utils/b3Logger';
 
 import {
   type ExtraField,
-  getB2BAllOrdersREST,
+  getB2BAllOrders,
   getBCAllOrders,
   getBcOrderStatusType,
   getEpicorOrderId,
   getOrdersCreatedByUser,
-  getOrdersExtraFields,
+  getOrdersExtraFieldsProgressive,
   getOrderStatusType,
 } from '../customizations';
 
@@ -139,8 +139,12 @@ function Order({ isCompanyOrder = false }: OrderProps) {
   const [, setFilterInfo] = useState<Array<any>>([]);
   const [getOrderStatuses, setOrderStatuses] = useState<Array<any>>([]);
 
-  // STATLAB CUSTOMIZATION: Store enriched extra fields
+  // STATLAB CUSTOMIZATION: Store enriched extra fields and track loading state
   const [extraFieldsMap, setExtraFieldsMap] = useState<Record<string, ExtraField[]>>({});
+  // Track which order IDs are currently loading their extraFields
+  const [loadingOrderIds, setLoadingOrderIds] = useState<Set<string>>(new Set());
+  // Ref to track current page's order IDs to prevent stale updates
+  const currentPageOrderIdsRef = useRef<Set<string>>(new Set());
 
   const [orderBy, setOrderBy] = useState<OrderBy>({
     key: 'orderId',
@@ -226,37 +230,76 @@ function Order({ isCompanyOrder = false }: OrderProps) {
   }: Partial<FilterSearchProps>): Promise<{ edges: ListItem[]; totalCount: number }> => {
     let edges: any[] = [];
     let totalCount = 0;
-    let extraFieldsMapData: Record<string, ExtraField[]> = {};
 
     if (isB2BUser) {
-      // Use REST API for B2B users - extraFields included in single call
-      const result = await getB2BAllOrdersREST({
+      // Use GraphQL for B2B users - REST API only returns recent orders
+      const result = await getB2BAllOrders({
         ...params,
         email: getEmail(createdBy),
         createdBy: getName(createdBy),
       });
-      edges = result.edges;
+      edges = result.edges || [];
       totalCount = result.totalCount;
-      extraFieldsMapData = result.extraFieldsMap;
+
+      // PROGRESSIVE LOADING: Show skeleton while loading, update each row as its data arrives
+      const idsToFetch = edges
+        .map((item: any) => String(item.node.orderId))
+        .filter((id: any) => id);
+      if (idsToFetch.length > 0) {
+        // Track current page's order IDs and set them as loading
+        currentPageOrderIdsRef.current = new Set(idsToFetch);
+        setLoadingOrderIds(new Set(idsToFetch));
+        // Clear previous extraFields for new page
+        setExtraFieldsMap({});
+
+        getOrdersExtraFieldsProgressive(idsToFetch, true, (accumulated) => {
+          // Only update if these are still the current page's orders
+          if (currentPageOrderIdsRef.current.size > 0) {
+            setExtraFieldsMap(accumulated);
+            // Remove loaded IDs from loading set
+            setLoadingOrderIds((prev) => {
+              const next = new Set(prev);
+              Object.keys(accumulated).forEach((id) => next.delete(id));
+              return next;
+            });
+          }
+        }).catch((e) => {
+          b2bLogger.error('Error fetching extra fields', e);
+          setLoadingOrderIds(new Set());
+        });
+      }
     } else {
       // Keep GraphQL for BC customers
       const result = await getBCAllOrders(params);
       edges = result.edges || [];
       totalCount = result.totalCount;
 
-      // BC customers still need separate extraFields fetch
-      const idsToFetch = edges.map((item: any) => item.node.orderId).filter((id: any) => id);
+      // PROGRESSIVE LOADING: Same pattern for BC customers
+      const idsToFetch = edges
+        .map((item: any) => String(item.node.orderId))
+        .filter((id: any) => id);
       if (idsToFetch.length > 0) {
-        try {
-          extraFieldsMapData = await getOrdersExtraFields(idsToFetch, false);
-        } catch (e) {
+        currentPageOrderIdsRef.current = new Set(idsToFetch);
+        setLoadingOrderIds(new Set(idsToFetch));
+        setExtraFieldsMap({});
+
+        getOrdersExtraFieldsProgressive(idsToFetch, false, (accumulated) => {
+          if (currentPageOrderIdsRef.current.size > 0) {
+            setExtraFieldsMap(accumulated);
+            setLoadingOrderIds((prev) => {
+              const next = new Set(prev);
+              Object.keys(accumulated).forEach((id) => next.delete(id));
+              return next;
+            });
+          }
+        }).catch((e) => {
           b2bLogger.error('Error fetching extra fields in fetchList', e);
-        }
+          setLoadingOrderIds(new Set());
+        });
       }
     }
 
     setAllTotal(totalCount);
-    setExtraFieldsMap(extraFieldsMapData);
 
     return {
       edges: edges.map((row: PossibleNodeWrapper<object>) =>
@@ -304,12 +347,22 @@ function Order({ isCompanyOrder = false }: OrderProps) {
       width: '10%',
       isSortable: true,
       render: (item) => {
-        // STATLAB CUSTOMIZATION: Display Epicor Order ID
+        // STATLAB CUSTOMIZATION: Display Epicor Order ID with skeleton loader
+        const isLoading = loadingOrderIds.has(String(item.orderId));
+
+        // Show skeleton while loading - don't show BC order ID
+        if (isLoading) {
+          return <Skeleton variant="text" width={80} height={24} />;
+        }
+
         const itemWithExtraFields = {
           ...item,
           extraFields: extraFieldsMap[item.orderId] || item.extraFields,
         };
-        return getEpicorOrderId(itemWithExtraFields) || item.orderId;
+        const epicorId = getEpicorOrderId(itemWithExtraFields);
+
+        // If we have the Epicor ID, show it; otherwise show ""
+        return epicorId || '';
       },
     },
     {
@@ -447,11 +500,13 @@ function Order({ isCompanyOrder = false }: OrderProps) {
               ...row,
               extraFields: extraFieldsMap[row.orderId] || row.extraFields,
             };
+            const isLoadingRow = loadingOrderIds.has(String(row.orderId));
             return (
               <OrderItemCard
                 key={row.orderId}
                 goToDetail={() => goToDetail(row, index)}
                 item={itemWithExtraFields}
+                isLoading={isLoadingRow}
               />
             );
           }}
