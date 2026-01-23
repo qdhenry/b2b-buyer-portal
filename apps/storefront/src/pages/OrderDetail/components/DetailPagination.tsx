@@ -127,10 +127,10 @@ export function DetailPagination({ onChange, color }: DetailPageProps) {
   };
 
   useEffect(() => {
-    if (totalCount > 0) setListIndex(currentIndex);
-    if (listIndex === initListIndex) return;
-    const searchPageStart = currentIndex + (searchParams.offset || 0);
-    setListIndex(searchPageStart);
+    if (totalCount > 0) {
+      const searchPageStart = currentIndex + (searchParams.offset || 0);
+      setListIndex(searchPageStart);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 

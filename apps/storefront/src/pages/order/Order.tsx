@@ -331,6 +331,7 @@ function Order({ isCompanyOrder = false }: OrderProps) {
         searchParams: {
           ...filterData,
           orderBy: getOrderBy(orderBy),
+          offset: pagination.offset,
         },
         totalCount: allTotal,
         isCompanyOrder,
