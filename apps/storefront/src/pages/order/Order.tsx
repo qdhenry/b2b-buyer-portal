@@ -131,7 +131,35 @@ function Order({ isCompanyOrder = false }: OrderProps) {
   const { role, isAgenting, companyId, isB2BUser, isEnabledCompanyHierarchy, selectedCompanyId } =
     useData();
 
-  const [pagination, setPagination] = useState({ offset: 0, first: 10 });
+  // Persist pagination perPage preference in sessionStorage
+  const PAGINATION_STORAGE_KEY = 'b2b_orders_pagination';
+
+  const [pagination, setPaginationState] = useState(() => {
+    try {
+      const stored = sessionStorage.getItem(PAGINATION_STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return { offset: 0, first: parsed.first ?? 10 };
+      }
+    } catch {
+      // Ignore parse errors
+    }
+    return { offset: 0, first: 10 };
+  });
+
+  // Wrapper to persist pagination changes
+  const setPagination = (newPagination: { offset: number; first: number } | ((prev: { offset: number; first: number }) => { offset: number; first: number })) => {
+    setPaginationState((prev) => {
+      const next = typeof newPagination === 'function' ? newPagination(prev) : newPagination;
+      // Persist perPage preference
+      try {
+        sessionStorage.setItem(PAGINATION_STORAGE_KEY, JSON.stringify({ first: next.first }));
+      } catch {
+        // Ignore storage errors
+      }
+      return next;
+    });
+  };
 
   const [allTotal, setAllTotal] = useState(0);
   const [filterData, setFilterData] = useState<Partial<FilterSearchProps>>();
@@ -332,6 +360,7 @@ function Order({ isCompanyOrder = false }: OrderProps) {
           ...filterData,
           orderBy: getOrderBy(orderBy),
           offset: pagination.offset,
+          first: pagination.first,
         },
         totalCount: allTotal,
         isCompanyOrder,
