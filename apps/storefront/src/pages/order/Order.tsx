@@ -360,7 +360,8 @@ function Order({ isCompanyOrder = false }: OrderProps) {
           ...filterData,
           orderBy: getOrderBy(orderBy),
           offset: pagination.offset,
-          first: pagination.first,
+          // Note: first is NOT passed here - perPage is persisted via sessionStorage
+          // and DetailPagination uses its own first: 3 for fetching adjacent orders
         },
         totalCount: allTotal,
         isCompanyOrder,
