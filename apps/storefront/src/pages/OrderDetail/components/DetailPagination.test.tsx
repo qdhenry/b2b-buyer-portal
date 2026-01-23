@@ -328,18 +328,20 @@ describe('DetailPagination integration scenarios', () => {
 
 describe('boundary detection for prev/next buttons', () => {
   it('disables prev button at first order (toLeft)', () => {
-    const listIndex = 0;
-    const totalCount = 100;
+    const listIndex: number = 0;
+    const totalCount: number = 100;
 
     // At position 0, user has reached the left boundary
     const atLeftBoundary = listIndex === 0;
+    const atRightBoundary = listIndex === totalCount - 1;
 
     expect(atLeftBoundary).toBe(true);
+    expect(atRightBoundary).toBe(false);
   });
 
   it('disables next button at last order (toRight)', () => {
-    const listIndex = 99; // 0-indexed, last of 100 orders
-    const totalCount = 100;
+    const listIndex: number = 99; // 0-indexed, last of 100 orders
+    const totalCount: number = 100;
 
     // At position 99 (last), user has reached the right boundary
     const atRightBoundary = listIndex === totalCount - 1;
@@ -348,8 +350,8 @@ describe('boundary detection for prev/next buttons', () => {
   });
 
   it('enables both buttons in the middle', () => {
-    const listIndex = 50;
-    const totalCount = 100;
+    const listIndex: number = 50;
+    const totalCount: number = 100;
 
     const atLeftBoundary = listIndex === 0;
     const atRightBoundary = listIndex === totalCount - 1;
