@@ -7,7 +7,7 @@ import { displayFormat } from '@/utils/b3DateFormat';
 import {
   getEpicorOrderId,
   parseEpicorLotPackSlip,
-  LotPackSlipItem,
+  createLotPackSlipLookup,
 } from '../../pages/customizations';
 
 // Define the shape of the invoice data we expect
@@ -18,7 +18,6 @@ const PAGE_MARGIN = 10; // mm
 const CONTENT_WIDTH = 190; // 210 - 20
 const COLOR_BLACK = '#000000';
 const COLOR_WHITE = '#FFFFFF';
-const COLOR_CYAN_ACCENT = '#00B0B9'; // Teal/cyan for Quick Reference bar
 const COLOR_CYAN_BG = '#E0F7FA'; // Light cyan for info grid background
 
 // Placeholder for missing data
@@ -198,44 +197,89 @@ export class InvoicePdfGenerator {
 
     this.doc.setFont('helvetica', 'normal');
 
-    // Billing Address
-    const billTo = this.invoice.details?.header?.billing_address;
+    // Billing Address - try invoice header first, then order address fallback
+    const invoiceBillTo = this.invoice.details?.header?.billing_address;
+    const orderBillTo = this.invoice.orderBillingAddress;
     let billY = y;
-    if (billTo) {
-      // Assuming company name might be first_name last_name or custom field
-      // The PDF shows "FISHER- LABCORP" which looks like a company name.
-      // InvoiceList doesn't have a direct 'company' field in address, usually it's `company` or fallback to name.
-      const name = billTo.custom_fields?.company_name || `${billTo.first_name} ${billTo.last_name}`;
+
+    if (invoiceBillTo?.street_1) {
+      // Use invoice header billing address
+      const name =
+        invoiceBillTo.custom_fields?.company_name ||
+        `${invoiceBillTo.first_name} ${invoiceBillTo.last_name}`;
       this.doc.text(name, leftX, billY);
       billY += 5;
-      this.doc.text(billTo.street_1, leftX, billY);
+      this.doc.text(invoiceBillTo.street_1, leftX, billY);
       billY += 5;
-      if (billTo.street_2) {
-        this.doc.text(billTo.street_2, leftX, billY);
+      if (invoiceBillTo.street_2) {
+        this.doc.text(invoiceBillTo.street_2, leftX, billY);
         billY += 5;
       }
-      this.doc.text(`${billTo.city}, ${billTo.state} ${billTo.zip_code}`, leftX, billY);
+      this.doc.text(
+        `${invoiceBillTo.city}, ${invoiceBillTo.state} ${invoiceBillTo.zip_code}`,
+        leftX,
+        billY
+      );
       billY += 5;
-      this.doc.text(billTo.country, leftX, billY);
+      this.doc.text(invoiceBillTo.country, leftX, billY);
+      billY += 5;
+    } else if (orderBillTo?.street_1) {
+      // Fallback to order billing address
+      const name = orderBillTo.company || `${orderBillTo.first_name} ${orderBillTo.last_name}`;
+      this.doc.text(name, leftX, billY);
+      billY += 5;
+      this.doc.text(orderBillTo.street_1, leftX, billY);
+      billY += 5;
+      if (orderBillTo.street_2) {
+        this.doc.text(orderBillTo.street_2, leftX, billY);
+        billY += 5;
+      }
+      this.doc.text(`${orderBillTo.city}, ${orderBillTo.state} ${orderBillTo.zip}`, leftX, billY);
+      billY += 5;
+      this.doc.text(orderBillTo.country, leftX, billY);
       billY += 5;
     }
 
-    // Shipping Address
-    const shipTo = this.invoice.details?.header?.shipping_addresses?.[0];
+    // Shipping Address - try invoice header first, then order address fallback
+    const invoiceShipTo = this.invoice.details?.header?.shipping_addresses?.[0];
+    const orderShipTo = this.invoice.orderShippingAddress;
     let shipY = y;
-    if (shipTo) {
-      const name = shipTo.custom_fields?.company_name || `${shipTo.first_name} ${shipTo.last_name}`;
+
+    if (invoiceShipTo?.street_1) {
+      // Use invoice header shipping address
+      const name =
+        invoiceShipTo.custom_fields?.company_name ||
+        `${invoiceShipTo.first_name} ${invoiceShipTo.last_name}`;
       this.doc.text(name, rightX, shipY);
       shipY += 5;
-      this.doc.text(shipTo.street_1, rightX, shipY);
+      this.doc.text(invoiceShipTo.street_1, rightX, shipY);
       shipY += 5;
-      if (shipTo.street_2) {
-        this.doc.text(shipTo.street_2, rightX, shipY);
+      if (invoiceShipTo.street_2) {
+        this.doc.text(invoiceShipTo.street_2, rightX, shipY);
         shipY += 5;
       }
-      this.doc.text(`${shipTo.city}, ${shipTo.state} ${shipTo.zip_code}`, rightX, shipY);
+      this.doc.text(
+        `${invoiceShipTo.city}, ${invoiceShipTo.state} ${invoiceShipTo.zip_code}`,
+        rightX,
+        shipY
+      );
       shipY += 5;
-      this.doc.text(shipTo.country, rightX, shipY);
+      this.doc.text(invoiceShipTo.country, rightX, shipY);
+      shipY += 5;
+    } else if (orderShipTo?.street_1) {
+      // Fallback to order shipping address
+      const name = orderShipTo.company || `${orderShipTo.first_name} ${orderShipTo.last_name}`;
+      this.doc.text(name, rightX, shipY);
+      shipY += 5;
+      this.doc.text(orderShipTo.street_1, rightX, shipY);
+      shipY += 5;
+      if (orderShipTo.street_2) {
+        this.doc.text(orderShipTo.street_2, rightX, shipY);
+        shipY += 5;
+      }
+      this.doc.text(`${orderShipTo.city}, ${orderShipTo.state} ${orderShipTo.zip}`, rightX, shipY);
+      shipY += 5;
+      this.doc.text(orderShipTo.country, rightX, shipY);
       shipY += 5;
     }
 
@@ -357,7 +401,7 @@ export class InvoicePdfGenerator {
     // Ship Date with value on next line
     this.doc.text('Ship Date:', col4X, y);
     y += 4;
-    this.doc.text(displayFormat(this.invoice.createdAt), col4X, y);
+    this.doc.text(`${displayFormat(this.invoice.createdAt)}`, col4X, y);
     y += 5;
     this.doc.text('FOB: Third Party', col4X, y);
     y += 5;
@@ -372,15 +416,9 @@ export class InvoicePdfGenerator {
   private drawTable() {
     const lineItems = this.invoice.details?.details?.line_items || [];
 
-    // Create a SKU lookup map from epicorLotPackSlip data
-    const lotPackSlipItems = parseEpicorLotPackSlip(this.invoice.extraFields);
-    const lotPackSlipBySku = new Map<string, LotPackSlipItem>();
-    lotPackSlipItems.forEach((item) => {
-      // Use first occurrence for each SKU (or could collect all if needed)
-      if (!lotPackSlipBySku.has(item.sku)) {
-        lotPackSlipBySku.set(item.sku, item);
-      }
-    });
+    // Create a lookup map keyed by pack_line for correct matching
+    // This fixes the bug where duplicate SKUs would show the same pack slip number
+    const lotPackSlipByLine = createLotPackSlipLookup(this.invoice.extraFields);
 
     // Add line numbers to each item (1, 2, 3...)
     const tableData = lineItems.map((item, index) => {
@@ -388,8 +426,8 @@ export class InvoicePdfGenerator {
       const qty = item.quantity;
       const extPrice = unitPrice * qty;
 
-      // Look up lot/pack slip data for this SKU
-      const lotPackData = lotPackSlipBySku.get(item.sku);
+      // Look up lot/pack slip data by line number (pack_line is 1-indexed, matching index + 1)
+      const lotPackData = lotPackSlipByLine.get(index + 1);
 
       return [
         index + 1, // Line number

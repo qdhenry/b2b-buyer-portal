@@ -288,7 +288,7 @@ function Invoice() {
         return;
       }
 
-      const pdfUrl = await getInvoicePdfUrl(invoiceNode.node);
+      const pdfUrl = await getInvoicePdfUrl(invoiceNode.node, !!isB2BUser);
 
       if (!pdfUrl) {
         snackbar.error(b3Lang('invoice.pdfUrlResolutionError'));
