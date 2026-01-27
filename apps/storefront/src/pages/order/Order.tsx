@@ -376,7 +376,7 @@ function Order({ isCompanyOrder = false }: OrderProps) {
       key: 'orderId',
       title: b3Lang('orders.order'),
       width: '10%',
-      isSortable: true,
+      isSortable: false,
       render: (item) => {
         // STATLAB CUSTOMIZATION: Display Epicor Order ID with skeleton loader
         const isLoading = loadingOrderIds.has(String(item.orderId));
