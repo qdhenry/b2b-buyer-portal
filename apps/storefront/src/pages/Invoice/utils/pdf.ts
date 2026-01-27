@@ -1,10 +1,10 @@
 import { InvoiceList } from '@/types/invoice';
-import { InvoicePdfGenerator } from '@/utils/pdf/InvoicePdfGenerator';
+import { InvoicePdfGenerator, LogoData } from '@/utils/pdf/InvoicePdfGenerator';
 
 // Cache the logo to avoid reloading on each PDF generation
-let cachedLogo: string | null = null;
+let cachedLogo: LogoData | null = null;
 
-const loadLogoIfNeeded = async (): Promise<string | undefined> => {
+const loadLogoIfNeeded = async (): Promise<LogoData | undefined> => {
   if (cachedLogo) {
     return cachedLogo;
   }
