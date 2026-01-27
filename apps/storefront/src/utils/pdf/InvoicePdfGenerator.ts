@@ -4,7 +4,11 @@ import autoTable from 'jspdf-autotable';
 import { InvoiceList } from '@/types/invoice';
 import { displayFormat } from '@/utils/b3DateFormat';
 
-import { getEpicorOrderId } from '../../pages/customizations';
+import {
+  getEpicorOrderId,
+  parseEpicorLotPackSlip,
+  createLotPackSlipLookup,
+} from '../../pages/customizations';
 
 // Define the shape of the invoice data we expect
 type InvoiceData = InvoiceList;
@@ -13,15 +17,20 @@ type InvoiceData = InvoiceList;
 const PAGE_MARGIN = 10; // mm
 const CONTENT_WIDTH = 190; // 210 - 20
 const COLOR_BLACK = '#000000';
-const COLOR_GRAY_BG = '#E6E6E6';
 const COLOR_WHITE = '#FFFFFF';
+const COLOR_CYAN_BG = '#E0F7FA'; // Light cyan for info grid background
 
 // Placeholder for missing data
 const MISSING_DATA_PLACEHOLDER = '---';
 
 // Logo URL
 const LOGO_URL =
-  'https://cdn11.bigcommerce.com/s-ujn2gplpvc/images/stencil/210x65/logo2x_1765213064__87900.original.png';
+  'https://s3-us-west-2.amazonaws.com/bundleb2b-v3.0-media-files-prod/logo_1746462580__32578.original_04e9964b-7219-4984-b921-fd689c3f3965.png';
+
+export interface LogoData {
+  base64: string;
+  aspectRatio: number; // width / height
+}
 
 export class InvoicePdfGenerator {
   private doc: jsPDF;
@@ -30,22 +39,22 @@ export class InvoicePdfGenerator {
 
   private currentY: number = 0;
 
-  private logoBase64: string | null = null;
+  private logoData: LogoData | null = null;
 
-  constructor(invoice: InvoiceData, logoBase64?: string) {
+  constructor(invoice: InvoiceData, logoData?: LogoData) {
     this.doc = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
       format: 'a4',
     });
     this.invoice = invoice;
-    this.logoBase64 = logoBase64 || null;
+    this.logoData = logoData || null;
   }
 
   /**
-   * Loads the logo image and returns it as a base64 string
+   * Loads the logo image and returns it as base64 with aspect ratio
    */
-  public static async loadLogo(): Promise<string> {
+  public static async loadLogo(): Promise<LogoData> {
     return new Promise((resolve, reject) => {
       const img = new Image();
       img.crossOrigin = 'anonymous';
@@ -57,7 +66,10 @@ export class InvoicePdfGenerator {
         if (ctx) {
           ctx.drawImage(img, 0, 0);
           const base64 = canvas.toDataURL('image/png');
-          resolve(base64);
+          resolve({
+            base64,
+            aspectRatio: img.width / img.height,
+          });
         } else {
           reject(new Error('Failed to get canvas context'));
         }
@@ -71,13 +83,14 @@ export class InvoicePdfGenerator {
    * Draws the logo image in the top right corner
    */
   private drawLogo() {
-    const logoX = 155;
+    const logoWidth = 50; // mm
+    const aspectRatio = this.logoData?.aspectRatio || 3.23; // fallback to default
+    const logoHeight = logoWidth / aspectRatio; // auto height based on actual image aspect ratio
+    const logoX = PAGE_MARGIN + CONTENT_WIDTH - logoWidth; // right-aligned
     const logoY = 5;
-    const logoWidth = 45; // mm - adjust based on desired size
-    const logoHeight = 14; // mm - maintains approximate aspect ratio (210x65 -> ~3.23:1)
 
-    if (this.logoBase64) {
-      this.doc.addImage(this.logoBase64, 'PNG', logoX, logoY, logoWidth, logoHeight);
+    if (this.logoData?.base64) {
+      this.doc.addImage(this.logoData.base64, 'PNG', logoX, logoY, logoWidth, logoHeight);
     } else {
       // Fallback to text if logo not loaded
       this.doc.setFontSize(24);
@@ -184,44 +197,89 @@ export class InvoicePdfGenerator {
 
     this.doc.setFont('helvetica', 'normal');
 
-    // Billing Address
-    const billTo = this.invoice.details?.header?.billing_address;
+    // Billing Address - try invoice header first, then order address fallback
+    const invoiceBillTo = this.invoice.details?.header?.billing_address;
+    const orderBillTo = this.invoice.orderBillingAddress;
     let billY = y;
-    if (billTo) {
-      // Assuming company name might be first_name last_name or custom field
-      // The PDF shows "FISHER- LABCORP" which looks like a company name.
-      // InvoiceList doesn't have a direct 'company' field in address, usually it's `company` or fallback to name.
-      const name = billTo.custom_fields?.company_name || `${billTo.first_name} ${billTo.last_name}`;
+
+    if (invoiceBillTo?.street_1) {
+      // Use invoice header billing address
+      const name =
+        invoiceBillTo.custom_fields?.company_name ||
+        `${invoiceBillTo.first_name} ${invoiceBillTo.last_name}`;
       this.doc.text(name, leftX, billY);
       billY += 5;
-      this.doc.text(billTo.street_1, leftX, billY);
+      this.doc.text(invoiceBillTo.street_1, leftX, billY);
       billY += 5;
-      if (billTo.street_2) {
-        this.doc.text(billTo.street_2, leftX, billY);
+      if (invoiceBillTo.street_2) {
+        this.doc.text(invoiceBillTo.street_2, leftX, billY);
         billY += 5;
       }
-      this.doc.text(`${billTo.city}, ${billTo.state} ${billTo.zip_code}`, leftX, billY);
+      this.doc.text(
+        `${invoiceBillTo.city}, ${invoiceBillTo.state} ${invoiceBillTo.zip_code}`,
+        leftX,
+        billY
+      );
       billY += 5;
-      this.doc.text(billTo.country, leftX, billY);
+      this.doc.text(invoiceBillTo.country, leftX, billY);
+      billY += 5;
+    } else if (orderBillTo?.street_1) {
+      // Fallback to order billing address
+      const name = orderBillTo.company || `${orderBillTo.first_name} ${orderBillTo.last_name}`;
+      this.doc.text(name, leftX, billY);
+      billY += 5;
+      this.doc.text(orderBillTo.street_1, leftX, billY);
+      billY += 5;
+      if (orderBillTo.street_2) {
+        this.doc.text(orderBillTo.street_2, leftX, billY);
+        billY += 5;
+      }
+      this.doc.text(`${orderBillTo.city}, ${orderBillTo.state} ${orderBillTo.zip}`, leftX, billY);
+      billY += 5;
+      this.doc.text(orderBillTo.country, leftX, billY);
       billY += 5;
     }
 
-    // Shipping Address
-    const shipTo = this.invoice.details?.header?.shipping_addresses?.[0];
+    // Shipping Address - try invoice header first, then order address fallback
+    const invoiceShipTo = this.invoice.details?.header?.shipping_addresses?.[0];
+    const orderShipTo = this.invoice.orderShippingAddress;
     let shipY = y;
-    if (shipTo) {
-      const name = shipTo.custom_fields?.company_name || `${shipTo.first_name} ${shipTo.last_name}`;
+
+    if (invoiceShipTo?.street_1) {
+      // Use invoice header shipping address
+      const name =
+        invoiceShipTo.custom_fields?.company_name ||
+        `${invoiceShipTo.first_name} ${invoiceShipTo.last_name}`;
       this.doc.text(name, rightX, shipY);
       shipY += 5;
-      this.doc.text(shipTo.street_1, rightX, shipY);
+      this.doc.text(invoiceShipTo.street_1, rightX, shipY);
       shipY += 5;
-      if (shipTo.street_2) {
-        this.doc.text(shipTo.street_2, rightX, shipY);
+      if (invoiceShipTo.street_2) {
+        this.doc.text(invoiceShipTo.street_2, rightX, shipY);
         shipY += 5;
       }
-      this.doc.text(`${shipTo.city}, ${shipTo.state} ${shipTo.zip_code}`, rightX, shipY);
+      this.doc.text(
+        `${invoiceShipTo.city}, ${invoiceShipTo.state} ${invoiceShipTo.zip_code}`,
+        rightX,
+        shipY
+      );
       shipY += 5;
-      this.doc.text(shipTo.country, rightX, shipY);
+      this.doc.text(invoiceShipTo.country, rightX, shipY);
+      shipY += 5;
+    } else if (orderShipTo?.street_1) {
+      // Fallback to order shipping address
+      const name = orderShipTo.company || `${orderShipTo.first_name} ${orderShipTo.last_name}`;
+      this.doc.text(name, rightX, shipY);
+      shipY += 5;
+      this.doc.text(orderShipTo.street_1, rightX, shipY);
+      shipY += 5;
+      if (orderShipTo.street_2) {
+        this.doc.text(orderShipTo.street_2, rightX, shipY);
+        shipY += 5;
+      }
+      this.doc.text(`${orderShipTo.city}, ${orderShipTo.state} ${orderShipTo.zip}`, rightX, shipY);
+      shipY += 5;
+      this.doc.text(orderShipTo.country, rightX, shipY);
       shipY += 5;
     }
 
@@ -232,39 +290,40 @@ export class InvoicePdfGenerator {
     const y = this.currentY;
     const h = 8;
 
-    // Black bar
-    this.doc.setFillColor(COLOR_BLACK);
+    // Light gray bar (matching example design)
+    this.doc.setFillColor(211, 211, 211); // #D3D3D3
     this.doc.rect(PAGE_MARGIN, y, CONTENT_WIDTH, h, 'F');
 
     // Text
-    this.doc.setTextColor(COLOR_WHITE);
+    this.doc.setTextColor(COLOR_BLACK);
     this.doc.setFontSize(10);
     this.doc.setFont('helvetica', 'bold');
 
-    // Icon placeholder (magnifying glass) - just text "Q"
-    this.doc.text('Q', PAGE_MARGIN + 2, y + 5.5);
-    this.doc.text('QUICK REFERENCE', PAGE_MARGIN + 8, y + 5.5);
+    // Magnifying glass icon placeholder (circle with Q)
+    this.doc.circle(PAGE_MARGIN + 5, y + 4, 3, 'S');
+    this.doc.setFontSize(7);
+    this.doc.text('Q', PAGE_MARGIN + 3.5, y + 5.5);
+    this.doc.setFontSize(10);
+    this.doc.text('QUICK REFERENCE', PAGE_MARGIN + 12, y + 5.5);
 
     this.doc.setFont('helvetica', 'normal');
     this.doc.text('QUESTIONS? Customer Service: 1-800-442-3573 7AM to 6:30PM CST', 80, y + 5.5);
 
-    this.doc.setTextColor(COLOR_BLACK); // Reset
     this.currentY += h;
   }
 
   private drawInvoiceInfoGrid() {
     const startY = this.currentY;
-    const h = 35; // approximate height
+    const h = 42; // increased height to accommodate line breaks in Shipping Details
 
-    // Gray Background
-    this.doc.setFillColor(COLOR_GRAY_BG);
+    // Light cyan background (matching example design)
+    this.doc.setFillColor(COLOR_CYAN_BG);
     this.doc.rect(PAGE_MARGIN, startY, CONTENT_WIDTH, h, 'F');
 
-    // Dashed border? The PDF has dashed lines.
+    // Solid thin border (no dashed lines - matching example)
     this.doc.setDrawColor(COLOR_BLACK);
-    this.doc.setLineDashPattern([1, 1], 0);
+    this.doc.setLineWidth(0.2);
     this.doc.rect(PAGE_MARGIN, startY, CONTENT_WIDTH, h, 'S');
-    this.doc.setLineDashPattern([], 0); // Reset
 
     // Columns
     const col1X = PAGE_MARGIN + 2;
@@ -339,12 +398,17 @@ export class InvoicePdfGenerator {
     this.doc.text('SHIPPING DETAILS', col4X, y);
     y += 5;
     this.doc.setFont('helvetica', 'normal');
-    // Missing Shipping Data
-    this.doc.text(`Ship Date: ${displayFormat(this.invoice.createdAt)}`, col4X, y); // Use created as placeholder
+    // Ship Date with value on next line
+    this.doc.text('Ship Date:', col4X, y);
+    y += 4;
+    this.doc.text(`${displayFormat(this.invoice.createdAt)}`, col4X, y);
     y += 5;
-    this.doc.text('FOB: Third Party', col4X, y); // Placeholder
+    this.doc.text('FOB: Third Party', col4X, y);
     y += 5;
-    this.doc.text('Shipping Via: FedEx Ground', col4X, y); // Placeholder
+    // Shipping Via with value on next line
+    this.doc.text('Shipping Via:', col4X, y);
+    y += 4;
+    this.doc.text('FedEx Ground', col4X, y); // Placeholder
 
     this.currentY += h + 5;
   }
@@ -352,51 +416,76 @@ export class InvoicePdfGenerator {
   private drawTable() {
     const lineItems = this.invoice.details?.details?.line_items || [];
 
-    const tableData = lineItems.map((item) => {
+    // Create a lookup map keyed by pack_line for correct matching
+    // This fixes the bug where duplicate SKUs would show the same pack slip number
+    const lotPackSlipByLine = createLotPackSlipLookup(this.invoice.extraFields);
+
+    // Add line numbers to each item (1, 2, 3...)
+    const tableData = lineItems.map((item, index) => {
       const unitPrice = parseFloat(item.unit_price.value);
       const qty = item.quantity;
       const extPrice = unitPrice * qty;
 
+      // Look up lot/pack slip data by line number (pack_line is 1-indexed, matching index + 1)
+      const lotPackData = lotPackSlipByLine.get(index + 1);
+
       return [
-        { content: `${item.sku}\n${item.description}`, styles: { cellWidth: 60 } }, // Part & Description
-        MISSING_DATA_PLACEHOLDER, // Lot / Serial
-        MISSING_DATA_PLACEHOLDER, // Pack Slip
+        index + 1, // Line number
+        { content: `${item.sku}\n${item.description}`, styles: { cellWidth: 55 } }, // Part & Description
+        lotPackData?.lot_num || MISSING_DATA_PLACEHOLDER, // Lot / Serial
+        lotPackData?.pack_num || MISSING_DATA_PLACEHOLDER, // Pack Slip
         `${qty} CS`, // Qty Shipped (assuming Unit is CS for example, or need unit from data)
-        `${item.unit_price.code} ${unitPrice.toFixed(2)}/E`, // Unit Price
+        `${unitPrice.toFixed(2)}/E`, // Unit Price
         extPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), // Ext Price
       ];
     });
 
-    // Custom Header for PO/SO
+    // Custom Header for PO/SO - drawn manually for precise 50/50 split
     const poNumber = this.invoice.purchaseOrderNumber || MISSING_DATA_PLACEHOLDER;
     const soNumber =
       getEpicorOrderId(this.invoice) || this.invoice.orderNumber || MISSING_DATA_PLACEHOLDER;
 
-    // We can't easily inject a full width row *inside* the autotable body that spans all columns with specific styling using just the data array cleanly without hooks.
-    // Instead, I will rely on `didDrawPage` or just draw it as a separate block if it's outside the header.
-    // But the PDF shows it as a sub-header.
-    // I'll use a `willDrawCell` hook or simply add it as the first row and style it differently.
+    // Draw PO/SO bar manually (50/50 split)
+    const barHeight = 8;
+    const halfWidth = CONTENT_WIDTH / 2;
 
-    const finalTableData = [
-      // Special row for PO/SO
-      [
-        {
-          content: `Purchase Order: ${poNumber}                 Sales Order: ${soNumber}`,
-          colSpan: 6,
-          styles: {
-            fillColor: [217, 225, 242], // Light Blue
-            fontStyle: 'bold',
-            halign: 'left',
-          },
-        },
-      ],
-      ...tableData,
-    ];
+    // Left half - Purchase Order
+    this.doc.setFillColor(224, 247, 250); // Light cyan (#E0F7FA)
+    this.doc.rect(PAGE_MARGIN, this.currentY, halfWidth, barHeight, 'F');
+
+    // Right half - Sales Order
+    this.doc.rect(PAGE_MARGIN + halfWidth, this.currentY, halfWidth, barHeight, 'F');
+
+    // Border around entire bar
+    this.doc.setDrawColor(200, 200, 200);
+    this.doc.setLineWidth(0.1);
+    this.doc.rect(PAGE_MARGIN, this.currentY, CONTENT_WIDTH, barHeight, 'S');
+
+    // Vertical divider line in center
+    this.doc.line(PAGE_MARGIN + halfWidth, this.currentY, PAGE_MARGIN + halfWidth, this.currentY + barHeight);
+
+    // Text
+    this.doc.setFontSize(11);
+    this.doc.setFont('helvetica', 'bold');
+    this.doc.setTextColor(0, 0, 0);
+
+    // Purchase Order text (centered in left half)
+    this.doc.text(`Purchase Order: ${poNumber}`, PAGE_MARGIN + halfWidth / 2, this.currentY + 5.5, {
+      align: 'center',
+    });
+
+    // Sales Order text (centered in right half)
+    this.doc.text(`Sales Order: ${soNumber}`, PAGE_MARGIN + halfWidth + halfWidth / 2, this.currentY + 5.5, {
+      align: 'center',
+    });
+
+    this.currentY += barHeight;
 
     autoTable(this.doc, {
       startY: this.currentY,
       head: [
         [
+          '', // Line number column (empty header)
           'Part & Description',
           'Lot / Serial',
           'Pack Slip',
@@ -405,7 +494,7 @@ export class InvoicePdfGenerator {
           'Ext. Price',
         ],
       ],
-      body: finalTableData as any,
+      body: tableData as any,
       theme: 'plain', // We'll do custom styling
       styles: {
         fontSize: 8,
@@ -421,7 +510,8 @@ export class InvoicePdfGenerator {
         lineWidth: 0, // No border for header
       },
       columnStyles: {
-        5: { halign: 'right' }, // Ext Price right aligned
+        0: { cellWidth: 8, halign: 'center' }, // Line number column
+        6: { halign: 'right' }, // Ext Price right aligned
       },
       margin: { left: PAGE_MARGIN, right: PAGE_MARGIN },
     });
@@ -574,33 +664,54 @@ export class InvoicePdfGenerator {
     this.drawSectionHeader(
       'SHIPPING AND TRACKING',
       'QUESTIONS? Customer Service: 1-800-442-3573 7AM to 6:30PM CST',
+      'clipboard', // clipboard icon for shipping
     );
 
-    // Tracking Table
-    // Since we don't have tracking data in InvoiceList generally, we use placeholders
-    // Or if `invoice.details.details.shipments` exists, we try to use it.
+    // Parse epicorLotPackSlip from invoice extraFields
+    // Group by pack slip number to deduplicate (matching example design - 2 columns only)
+    const lotPackSlipItems = parseEpicorLotPackSlip(this.invoice.extraFields);
 
-    const shipments = this.invoice.details?.details?.shipments || [];
-    const trackingData =
-      shipments.length > 0
-        ? shipments.map((s) => [
-            s.id || MISSING_DATA_PLACEHOLDER,
-            s.tracking_number || MISSING_DATA_PLACEHOLDER,
-          ])
-        : [[MISSING_DATA_PLACEHOLDER, MISSING_DATA_PLACEHOLDER]];
-
-    autoTable(this.doc, {
-      startY: this.currentY,
-      head: [['Pack Slip Number', 'Associated Tracking Number']],
-      body: trackingData,
-      theme: 'plain',
-      styles: { fontSize: 10, cellPadding: 3 },
-      headStyles: { fontStyle: 'bold', fillColor: COLOR_WHITE, textColor: COLOR_BLACK },
-      margin: { left: PAGE_MARGIN, right: PAGE_MARGIN },
+    // Group by pack slip number to get unique pack slip -> tracking number pairs
+    const packSlipMap = new Map<string, string>();
+    lotPackSlipItems.forEach((item) => {
+      if (item.pack_num && !packSlipMap.has(item.pack_num)) {
+        packSlipMap.set(item.pack_num, item.tracking_num || MISSING_DATA_PLACEHOLDER);
+      }
     });
 
-    // @ts-ignore
-    this.currentY = this.doc.lastAutoTable.finalY + 5;
+    // Draw as a simple list format (matching example design)
+    const shippingCol1X = PAGE_MARGIN;
+    const shippingCol2X = PAGE_MARGIN + 60;
+    let shippingY = this.currentY;
+
+    // Header row
+    this.doc.setFontSize(10);
+    this.doc.setFont('helvetica', 'bold');
+    this.doc.text('Pack Slip Number', shippingCol1X, shippingY);
+    this.doc.text('Associated Tracking Number', shippingCol2X, shippingY);
+    shippingY += 2;
+
+    // Underline under headers
+    this.doc.setLineWidth(0.3);
+    this.doc.line(shippingCol1X, shippingY, shippingCol1X + 50, shippingY);
+    this.doc.line(shippingCol2X, shippingY, shippingCol2X + 80, shippingY);
+    shippingY += 5;
+
+    // Data rows
+    this.doc.setFont('helvetica', 'normal');
+    if (packSlipMap.size > 0) {
+      packSlipMap.forEach((trackingNum, packNum) => {
+        this.doc.text(packNum, shippingCol1X, shippingY);
+        this.doc.text(trackingNum, shippingCol2X, shippingY);
+        shippingY += 5;
+      });
+    } else {
+      this.doc.text(MISSING_DATA_PLACEHOLDER, shippingCol1X, shippingY);
+      this.doc.text(MISSING_DATA_PLACEHOLDER, shippingCol2X, shippingY);
+      shippingY += 5;
+    }
+
+    this.currentY = shippingY + 5;
 
     this.doc.setFontSize(9);
     this.doc.text(
@@ -614,7 +725,11 @@ export class InvoicePdfGenerator {
     this.drawSectionHeader(
       'BILL PAYMENT MADE EASY',
       'QUESTIONS? Accounts Receivable: 972-436-1010, option 6',
+      'dollar', // dollar icon for payment
     );
+
+    // Store the start Y for dashed border box
+    const billPaymentStartY = this.currentY;
 
     let y = this.currentY + 5;
     const colWidth = CONTENT_WIDTH / 3;
@@ -622,14 +737,14 @@ export class InvoicePdfGenerator {
     // Col 1: ACH
     this.doc.setFontSize(9);
     this.doc.setFont('helvetica', 'bold');
-    this.doc.text('PAY BY ACH (recommended)', PAGE_MARGIN, y);
+    this.doc.text('PAY BY ACH (recommended)', PAGE_MARGIN + 2, y);
     y += 5;
     this.doc.setFont('helvetica', 'normal');
-    this.doc.text('Account Name: SLMP LLC', PAGE_MARGIN, y);
+    this.doc.text('Account Name: SLMP LLC', PAGE_MARGIN + 2, y);
     y += 4;
-    this.doc.text('Account Number: 839921639', PAGE_MARGIN, y);
+    this.doc.text('Account Number: 839921639', PAGE_MARGIN + 2, y);
     y += 4;
-    this.doc.text('Routing Number: 111000614', PAGE_MARGIN, y);
+    this.doc.text('Routing Number: 111000614', PAGE_MARGIN + 2, y);
 
     // Col 2: WIRE
     y -= 13; // Reset Y
@@ -659,6 +774,14 @@ export class InvoicePdfGenerator {
     y += 4;
     this.doc.text('Dallas, TX 75267-8056', col3X, y);
 
+    // Draw dashed border box around Bill Payment section (matching example)
+    const billPaymentEndY = billPaymentStartY + 35;
+    this.doc.setDrawColor(COLOR_BLACK);
+    this.doc.setLineDashPattern([2, 2], 0);
+    this.doc.setLineWidth(0.3);
+    this.doc.rect(PAGE_MARGIN, billPaymentStartY, CONTENT_WIDTH, billPaymentEndY - billPaymentStartY, 'S');
+    this.doc.setLineDashPattern([], 0); // Reset
+
     // --- Bottom Footer ---
     const bottomY = 285;
     this.doc.setFontSize(10);
@@ -668,23 +791,44 @@ export class InvoicePdfGenerator {
     this.doc.text('Page 2', 190, bottomY, { align: 'right' });
   }
 
-  private drawSectionHeader(title: string, subText: string) {
+  private drawSectionHeader(title: string, subText: string, iconType: 'clipboard' | 'dollar' = 'dollar') {
     const y = this.currentY;
     const h = 8;
 
-    // Black bar with icon placeholder
+    // Black bar with icon
     this.doc.setFillColor(COLOR_BLACK);
     this.doc.rect(PAGE_MARGIN, y, CONTENT_WIDTH, h, 'F');
 
     this.doc.setTextColor(COLOR_WHITE);
     this.doc.setFontSize(10);
     this.doc.setFont('helvetica', 'bold');
-    // Icon placeholder
-    this.doc.text('$', PAGE_MARGIN + 2, y + 5.5);
-    this.doc.text(title, PAGE_MARGIN + 8, y + 5.5);
+
+    // Draw icon based on type
+    const iconX = PAGE_MARGIN + 2;
+    const iconY = y + 1.5;
+
+    if (iconType === 'clipboard') {
+      // Draw a simple clipboard/document icon
+      this.doc.setDrawColor(COLOR_WHITE);
+      this.doc.setLineWidth(0.3);
+      // Document outline
+      this.doc.rect(iconX + 1, iconY, 4, 5, 'S');
+      // Clipboard clip at top
+      this.doc.rect(iconX + 2, iconY - 0.5, 2, 1, 'S');
+    } else {
+      // Draw dollar sign in circle
+      this.doc.setDrawColor(COLOR_WHITE);
+      this.doc.setLineWidth(0.3);
+      this.doc.circle(iconX + 3, y + 4, 2.5, 'S');
+      this.doc.setFontSize(7);
+      this.doc.text('$', iconX + 1.8, y + 5.2);
+      this.doc.setFontSize(10);
+    }
+
+    this.doc.text(title, PAGE_MARGIN + 10, y + 5.5);
 
     this.doc.setFont('helvetica', 'normal');
-    this.doc.text(subText, 80, y + 5.5);
+    this.doc.text(subText, 85, y + 5.5);
 
     this.doc.setTextColor(COLOR_BLACK);
     this.currentY += h + 5;

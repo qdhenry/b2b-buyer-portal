@@ -57,6 +57,10 @@ query GetInvoices {
           bcId,
         },
         orderUserId,
+        extraFields {
+          fieldName,
+          fieldValue,
+        },
       }
     }
   }
@@ -151,6 +155,10 @@ query GetInvoiceDetails {
     originalBalance {
       code,
       value,
+    },
+    extraFields {
+      fieldName,
+      fieldValue,
     },
   }
 }`;

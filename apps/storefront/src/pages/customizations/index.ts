@@ -17,6 +17,16 @@
 export { useOrderCustomizations, getEpicorOrderId } from './useOrderCustomizations';
 export type { OrderData, UseOrderCustomizationsProps, UseOrderCustomizationsReturn } from './types';
 
+// Invoice helpers for parsing Epicor lot/pack slip data and fetching order addresses
+export {
+  parseEpicorLotPackSlip,
+  fetchOrderAddresses,
+  getBcOrderIdFromInvoice,
+  createLotPackSlipLookup,
+  type LotPackSlipItem,
+  type OrderAddresses,
+} from './invoiceHelpers';
+
 // Export custom order queries
 export {
   getB2BAllOrders,
