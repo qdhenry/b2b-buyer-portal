@@ -4,7 +4,11 @@ import autoTable from 'jspdf-autotable';
 import { InvoiceList } from '@/types/invoice';
 import { displayFormat } from '@/utils/b3DateFormat';
 
-import { getEpicorOrderId } from '../../pages/customizations';
+import {
+  getEpicorOrderId,
+  parseEpicorLotPackSlip,
+  LotPackSlipItem,
+} from '../../pages/customizations';
 
 // Define the shape of the invoice data we expect
 type InvoiceData = InvoiceList;
@@ -352,15 +356,28 @@ export class InvoicePdfGenerator {
   private drawTable() {
     const lineItems = this.invoice.details?.details?.line_items || [];
 
+    // Create a SKU lookup map from epicorLotPackSlip data
+    const lotPackSlipItems = parseEpicorLotPackSlip(this.invoice.extraFields);
+    const lotPackSlipBySku = new Map<string, LotPackSlipItem>();
+    lotPackSlipItems.forEach((item) => {
+      // Use first occurrence for each SKU (or could collect all if needed)
+      if (!lotPackSlipBySku.has(item.sku)) {
+        lotPackSlipBySku.set(item.sku, item);
+      }
+    });
+
     const tableData = lineItems.map((item) => {
       const unitPrice = parseFloat(item.unit_price.value);
       const qty = item.quantity;
       const extPrice = unitPrice * qty;
 
+      // Look up lot/pack slip data for this SKU
+      const lotPackData = lotPackSlipBySku.get(item.sku);
+
       return [
         { content: `${item.sku}\n${item.description}`, styles: { cellWidth: 60 } }, // Part & Description
-        MISSING_DATA_PLACEHOLDER, // Lot / Serial
-        MISSING_DATA_PLACEHOLDER, // Pack Slip
+        lotPackData?.lot_num || MISSING_DATA_PLACEHOLDER, // Lot / Serial
+        lotPackData?.pack_num || MISSING_DATA_PLACEHOLDER, // Pack Slip
         `${qty} CS`, // Qty Shipped (assuming Unit is CS for example, or need unit from data)
         `${item.unit_price.code} ${unitPrice.toFixed(2)}/E`, // Unit Price
         extPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), // Ext Price
@@ -576,22 +593,29 @@ export class InvoicePdfGenerator {
       'QUESTIONS? Customer Service: 1-800-442-3573 7AM to 6:30PM CST',
     );
 
-    // Tracking Table
-    // Since we don't have tracking data in InvoiceList generally, we use placeholders
-    // Or if `invoice.details.details.shipments` exists, we try to use it.
+    // Tracking Table - Parse epicorLotPackSlip from invoice extraFields
+    const lotPackSlipItems = parseEpicorLotPackSlip(this.invoice.extraFields);
 
-    const shipments = this.invoice.details?.details?.shipments || [];
     const trackingData =
-      shipments.length > 0
-        ? shipments.map((s) => [
-            s.id || MISSING_DATA_PLACEHOLDER,
-            s.tracking_number || MISSING_DATA_PLACEHOLDER,
+      lotPackSlipItems.length > 0
+        ? lotPackSlipItems.map((item) => [
+            item.sku || MISSING_DATA_PLACEHOLDER,
+            item.lot_num || MISSING_DATA_PLACEHOLDER,
+            item.pack_num || MISSING_DATA_PLACEHOLDER,
+            item.tracking_num || MISSING_DATA_PLACEHOLDER,
           ])
-        : [[MISSING_DATA_PLACEHOLDER, MISSING_DATA_PLACEHOLDER]];
+        : [
+            [
+              MISSING_DATA_PLACEHOLDER,
+              MISSING_DATA_PLACEHOLDER,
+              MISSING_DATA_PLACEHOLDER,
+              MISSING_DATA_PLACEHOLDER,
+            ],
+          ];
 
     autoTable(this.doc, {
       startY: this.currentY,
-      head: [['Pack Slip Number', 'Associated Tracking Number']],
+      head: [['SKU', 'Lot #', 'Pack Slip Number', 'Associated Tracking Number']],
       body: trackingData,
       theme: 'plain',
       styles: { fontSize: 10, cellPadding: 3 },
