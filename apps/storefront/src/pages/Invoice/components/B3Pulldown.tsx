@@ -5,13 +5,15 @@ import { IconButton, Menu, MenuItem } from '@mui/material';
 import { styled } from '@mui/material/styles';
 
 import { useB3Lang } from '@/lib/lang';
-import { rolePermissionSelector, useAppSelector } from '@/store';
+// HIDDEN: Pay option temporarily disabled. Uncomment when restoring Pay functionality.
+// import { rolePermissionSelector, useAppSelector } from '@/store';
 import { InvoiceList } from '@/types/invoice';
 import { verifyLevelPermission } from '@/utils/b3CheckPermissions/check';
 import { b2bPermissionsMap } from '@/utils/b3CheckPermissions/config';
 import { snackbar } from '@/utils/b3Tip';
 
-import { gotoInvoiceCheckoutUrl } from '../utils/payment';
+// HIDDEN: Pay option temporarily disabled. Uncomment when restoring Pay functionality.
+// import { gotoInvoiceCheckoutUrl } from '../utils/payment';
 import { downloadInvoicePdf, getInvoicePdfUrl } from '../utils/pdf';
 
 const StyledMenu = styled(Menu)(() => ({
@@ -35,19 +37,25 @@ function B3Pulldown({
 
   setInvoiceId,
   handleOpenHistoryModal,
-  isCurrentCompany,
-  invoicePay,
+  // HIDDEN: Pay option temporarily disabled. Rename back to isCurrentCompany and invoicePay when restoring.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  isCurrentCompany: _isCurrentCompany,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  invoicePay: _invoicePay,
 }: B3PulldownProps) {
-  const platform = useAppSelector(({ global }) => global.storeInfo.platform);
+  // HIDDEN: Pay option temporarily disabled. Uncomment when restoring Pay functionality.
+  // const platform = useAppSelector(({ global }) => global.storeInfo.platform);
   const ref = useRef<HTMLButtonElement | null>(null);
   const [isOpen, setIsOpen] = useState(false);
-  const [isPay, setIsPay] = useState<boolean>(true);
+  // HIDDEN: Pay option temporarily disabled. Uncomment when restoring Pay functionality.
+  // const [isPay, setIsPay] = useState<boolean>(true);
 
   const navigate = useNavigate();
 
   const b3Lang = useB3Lang();
 
-  const { invoicePayPermission, purchasabilityPermission } = useAppSelector(rolePermissionSelector);
+  // HIDDEN: Pay option temporarily disabled. Uncomment when restoring Pay functionality.
+  // const { invoicePayPermission, purchasabilityPermission } = useAppSelector(rolePermissionSelector);
   const { getOrderPermission: getOrderPermissionCode } = b2bPermissionsMap;
 
   const [isCanViewOrder, setIsCanViewOrder] = useState<boolean>(false);
@@ -84,29 +92,30 @@ function B3Pulldown({
     navigate(`/orderDetail/${orderNumber}`);
   };
 
-  const handlePay = async () => {
-    close();
-
-    const { openBalance, originalBalance, id } = row;
-
-    const params = {
-      lineItems: [
-        {
-          invoiceId: Number(id),
-          amount: openBalance.value === '.' ? '0' : `${Number(openBalance.value)}`,
-        },
-      ],
-      currency: openBalance?.code || originalBalance.code,
-    };
-
-    if (openBalance.value === '.' || Number(openBalance.value) === 0) {
-      snackbar.error('The payment amount entered has an invalid value.');
-
-      return;
-    }
-
-    await gotoInvoiceCheckoutUrl(params, platform, false);
-  };
+  // HIDDEN: Pay option temporarily disabled. Uncomment when restoring Pay functionality.
+  // const handlePay = async () => {
+  //   close();
+  //
+  //   const { openBalance, originalBalance, id } = row;
+  //
+  //   const params = {
+  //     lineItems: [
+  //       {
+  //         invoiceId: Number(id),
+  //         amount: openBalance.value === '.' ? '0' : `${Number(openBalance.value)}`,
+  //       },
+  //     ],
+  //     currency: openBalance?.code || originalBalance.code,
+  //   };
+  //
+  //   if (openBalance.value === '.' || Number(openBalance.value) === 0) {
+  //     snackbar.error('The payment amount entered has an invalid value.');
+  //
+  //     return;
+  //   }
+  //
+  //   await gotoInvoiceCheckoutUrl(params, platform, false);
+  // };
 
   const viewPaymentHistory = async () => {
     close();
@@ -123,12 +132,13 @@ function B3Pulldown({
   };
 
   useEffect(() => {
-    const { openBalance, orderUserId, companyInfo } = row;
-    const payPermissions =
-      Number(openBalance.value) > 0 && invoicePayPermission && purchasabilityPermission;
-
-    const isPayInvoice = isCurrentCompany ? payPermissions : payPermissions && invoicePay;
-    setIsPay(isPayInvoice);
+    const { orderUserId, companyInfo } = row;
+    // HIDDEN: Pay option temporarily disabled. Uncomment when restoring Pay functionality.
+    // const { openBalance } = row;
+    // const payPermissions =
+    //   Number(openBalance.value) > 0 && invoicePayPermission && purchasabilityPermission;
+    // const isPayInvoice = isCurrentCompany ? payPermissions : payPermissions && invoicePay;
+    // setIsPay(isPayInvoice);
 
     const viewOrderPermission = verifyLevelPermission({
       code: getOrderPermissionCode,
@@ -191,6 +201,7 @@ function B3Pulldown({
             {b3Lang('invoice.actions.viewPaymentHistory')}
           </MenuItem>
         )}
+        {/* HIDDEN: Pay option temporarily disabled. To restore, uncomment the block below.
         {isPay && (
           <MenuItem
             key="Pay"
@@ -202,6 +213,7 @@ function B3Pulldown({
             {b3Lang('invoice.actions.pay')}
           </MenuItem>
         )}
+        */}
         <MenuItem
           key="Print"
           sx={{
