@@ -13,6 +13,15 @@ import {
 // Define the shape of the invoice data we expect
 type InvoiceData = InvoiceList;
 
+// Processed cost lines for footer display
+interface ProcessedCostLines {
+  taxes: { description: string; amount: number }[];
+  freight: number;
+  surcharges: { description: string; amount: number }[];
+  discounts: { description: string; amount: number }[];
+  subtotal: number;
+}
+
 // Layout Constants
 const PAGE_MARGIN = 10; // mm
 const CONTENT_WIDTH = 190; // 210 - 20
@@ -520,6 +529,67 @@ export class InvoicePdfGenerator {
     this.currentY = this.doc.lastAutoTable.finalY + 5;
   }
 
+  /**
+   * Processes cost lines from invoice header into categorized breakdown
+   * Handles taxes, freight, surcharges, and discounts
+   */
+  private processCostLines(): ProcessedCostLines {
+    const costLines = this.invoice.details?.header?.cost_lines || [];
+    const lineItems = this.invoice.details?.details?.line_items || [];
+
+    // Calculate product subtotal from line items
+    const subtotal = lineItems.reduce((sum, item) => {
+      const unitPrice = parseFloat(item.unit_price.value) || 0;
+      return sum + unitPrice * item.quantity;
+    }, 0);
+
+    // Aggregate taxes by jurisdiction (same description = sum values)
+    const taxMap = new Map<string, number>();
+    let freight = 0;
+    const surcharges: { description: string; amount: number }[] = [];
+    const discounts: { description: string; amount: number }[] = [];
+
+    costLines.forEach((line) => {
+      const amount = parseFloat(line.amount.value) || 0;
+      const desc = line.description || '';
+
+      // Categorize by description pattern
+      if (desc.toLowerCase().startsWith('tax -') || desc.toLowerCase() === 'sales tax') {
+        // Tax line - aggregate by jurisdiction
+        const existing = taxMap.get(desc) || 0;
+        taxMap.set(desc, existing + amount);
+      } else if (
+        desc.toLowerCase().includes('freight') ||
+        desc.toLowerCase().includes('shipping')
+      ) {
+        // Freight/shipping
+        freight += amount;
+      } else if (desc.toLowerCase().includes('discount')) {
+        // Discount (usually negative)
+        discounts.push({ description: desc, amount });
+      } else if (desc.toLowerCase() === 'subtotal') {
+        // Ignore - we calculate our own subtotal from line items
+      } else if (desc.trim().length > 0) {
+        // Other cost lines (surcharges, fees, etc.)
+        surcharges.push({ description: desc, amount });
+      }
+    });
+
+    // Convert tax map to array
+    const taxes: { description: string; amount: number }[] = [];
+    taxMap.forEach((amount, description) => {
+      taxes.push({ description, amount });
+    });
+
+    return {
+      taxes,
+      freight,
+      surcharges,
+      discounts,
+      subtotal,
+    };
+  }
+
   private drawFooterP1() {
     // We need to check if we have space, else add page?
     // For now assuming it fits or we let it flow.
@@ -534,33 +604,77 @@ export class InvoicePdfGenerator {
     const totalY = y;
     this.doc.setFontSize(9);
 
-    const subtotal = this.invoice.originalBalance.value; // Assuming subtotal roughly equals original for now
+    // Process cost lines for detailed breakdown
+    const costBreakdown = this.processCostLines();
     const total = this.invoice.originalBalance.value;
     const due = this.invoice.openBalance.value;
 
-    const rowHeight = 6;
+    const rowHeight = 5;
+    const rightAlignX = 195;
 
     this.doc.setFont('helvetica', 'italic');
     this.doc.text('All currency listed is in US dollars', rightColX, y);
     y += rowHeight;
     this.doc.setFont('helvetica', 'normal');
 
+    // Product Subtotal (calculated from line items)
     this.doc.text('Product Subtotal', rightColX, y);
-    this.doc.text(`$${parseFloat(subtotal).toFixed(2)}`, 195, y, { align: 'right' });
+    this.doc.text(`$${costBreakdown.subtotal.toFixed(2)}`, rightAlignX, y, { align: 'right' });
     y += rowHeight;
+
+    // Freight (if present)
+    if (costBreakdown.freight > 0) {
+      this.doc.text('*Freight Customer Paid', rightColX, y);
+      this.doc.text(`$${costBreakdown.freight.toFixed(2)}`, rightAlignX, y, { align: 'right' });
+      y += rowHeight;
+    }
+
+    // Surcharges (Supply Chain Surcharge, etc.)
+    costBreakdown.surcharges.forEach((surcharge) => {
+      this.doc.text(surcharge.description, rightColX, y);
+      this.doc.text(`$${surcharge.amount.toFixed(2)}`, rightAlignX, y, { align: 'right' });
+      y += rowHeight;
+    });
+
+    // Discounts (usually negative values)
+    costBreakdown.discounts.forEach((discount) => {
+      this.doc.text(discount.description, rightColX, y);
+      const displayAmount =
+        discount.amount < 0
+          ? `-$${Math.abs(discount.amount).toFixed(2)}`
+          : `$${discount.amount.toFixed(2)}`;
+      this.doc.text(displayAmount, rightAlignX, y, { align: 'right' });
+      y += rowHeight;
+    });
+
+    // Tax breakdown by jurisdiction
+    costBreakdown.taxes.forEach((tax) => {
+      this.doc.text(tax.description, rightColX, y);
+      this.doc.text(`$${tax.amount.toFixed(2)}`, rightAlignX, y, { align: 'right' });
+      y += rowHeight;
+    });
+
+    // Thin line separator before totals
+    y += 2;
+    this.doc.setLineWidth(0.2);
+    this.doc.line(rightColX, y, rightAlignX, y);
+
+    // Add padding after line before totals
+    y += 5;
 
     this.doc.setFont('helvetica', 'bold');
     this.doc.text('INVOICE TOTAL', rightColX, y);
-    this.doc.text(`$${parseFloat(total).toFixed(2)}`, 195, y, { align: 'right' });
-    y += rowHeight;
+    this.doc.text(`$${parseFloat(total).toFixed(2)}`, rightAlignX, y, { align: 'right' });
 
-    // Dashed line
+    // Dashed line with padding
+    y += 3;
     this.doc.setLineDashPattern([1, 1], 0);
-    this.doc.line(rightColX, y - 4, 195, y - 4);
+    this.doc.line(rightColX, y, rightAlignX, y);
     this.doc.setLineDashPattern([], 0);
+    y += 4;
 
     this.doc.text('INVOICE AMOUNT DUE', rightColX, y);
-    this.doc.text(`$${parseFloat(due).toFixed(2)}`, 195, y, { align: 'right' });
+    this.doc.text(`$${parseFloat(due).toFixed(2)}`, rightAlignX, y, { align: 'right' });
 
     // --- Terms & Text (Left side) ---
     y = totalY; // Reset Y for left col
