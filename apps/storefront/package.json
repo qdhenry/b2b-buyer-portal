@@ -54,7 +54,7 @@
     "redux-persist": "^6.0.0",
     "ts-tracking-number": "^1.0.16",
     "uuid": "^13.0.0",
-    "vercel": "^50.4.10",
+    "vercel": "^50.8.1",
     "zod": "^4.1.12"
   },
   "devDependencies": {
