@@ -27,6 +27,7 @@ import { handleGetCorrespondingCurrencyToken } from '@/utils/currencyUtils';
 // import B3Filter from '../../components/filter/B3Filter';
 import {
   ExtraField,
+  getBcOrderIdFromInvoice,
   getCompaniesExtraFields,
   getEpicorOrderId,
   getOrdersExtraFields,
@@ -38,11 +39,7 @@ import InvoiceStatus from './components/InvoiceStatus';
 import PaymentsHistory from './components/PaymentsHistory';
 import PaymentSuccess from './components/PaymentSuccess';
 import PrintTemplate from './components/PrintTemplate';
-import InvoiceListType, {
-  defaultSortKey,
-  exportOrderByArr,
-  sortIdArr,
-} from './utils/config';
+import InvoiceListType, { defaultSortKey, exportOrderByArr, sortIdArr } from './utils/config';
 import { formattingNumericValues } from './utils/payment';
 import { getInvoicePdfUrl } from './utils/pdf';
 import { InvoiceItemCard } from './InvoiceItemCard';
@@ -277,6 +274,8 @@ function Invoice() {
 
   const handleViewInvoice = async (
     id: string,
+    //@ts-ignore
+
     _status: string | number,
     _invoiceCompanyId: string,
   ) => {
@@ -654,7 +653,17 @@ function Invoice() {
               },
             }}
             onClick={() => {
-              navigate(`/orderDetail/${item.orderNumber}`);
+              // Note: invoice.orderNumber is always null; the actual BC order ID is in extraFields.bcOrderId
+              const bcOrderId = getBcOrderIdFromInvoice(itemWithExtraFields.extraFields);
+              if (!bcOrderId) {
+                snackbar.error(b3Lang('invoice.orderIdNotAvailable'));
+                return;
+              }
+              const epicorId = getEpicorOrderId(itemWithExtraFields);
+              const url = epicorId
+                ? `/orderDetail/${bcOrderId}/${epicorId}`
+                : `/orderDetail/${bcOrderId}`;
+              navigate(url);
             }}
           >
             {displayOrderId || '-'}

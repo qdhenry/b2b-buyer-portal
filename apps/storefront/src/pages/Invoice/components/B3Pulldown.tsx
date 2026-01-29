@@ -12,6 +12,7 @@ import { verifyLevelPermission } from '@/utils/b3CheckPermissions/check';
 import { b2bPermissionsMap } from '@/utils/b3CheckPermissions/config';
 import { snackbar } from '@/utils/b3Tip';
 
+import { getBcOrderIdFromInvoice, getEpicorOrderId } from '../../customizations';
 // HIDDEN: Pay option temporarily disabled. Uncomment when restoring Pay functionality.
 // import { gotoInvoiceCheckoutUrl } from '../utils/payment';
 import { downloadInvoicePdf, getInvoicePdfUrl } from '../utils/pdf';
@@ -87,9 +88,16 @@ function B3Pulldown({
   };
 
   const handleViewOrder = () => {
-    const { orderNumber } = row;
     close();
-    navigate(`/orderDetail/${orderNumber}`);
+    // Note: invoice.orderNumber is always null; the actual BC order ID is in extraFields.bcOrderId
+    const bcOrderId = getBcOrderIdFromInvoice(row.extraFields);
+    if (!bcOrderId) {
+      snackbar.error('Order ID not available');
+      return;
+    }
+    const epicorId = getEpicorOrderId(row);
+    const url = epicorId ? `/orderDetail/${bcOrderId}/${epicorId}` : `/orderDetail/${bcOrderId}`;
+    navigate(url);
   };
 
   // HIDDEN: Pay option temporarily disabled. Uncomment when restoring Pay functionality.

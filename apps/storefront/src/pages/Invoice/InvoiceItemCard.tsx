@@ -9,7 +9,7 @@ import { InvoiceList, InvoiceListNode } from '@/types/invoice';
 import { currencyFormat } from '@/utils/b3CurrencyFormat';
 import { displayFormat } from '@/utils/b3DateFormat';
 
-import { getEpicorOrderId } from '../customizations';
+import { getBcOrderIdFromInvoice, getEpicorOrderId } from '../customizations';
 
 import B3Pulldown from './components/B3Pulldown';
 import InvoiceStatus from './components/InvoiceStatus';
@@ -76,7 +76,14 @@ export function InvoiceItemCard(props: InvoiceItemCardProps) {
               textDecoration: 'underline',
             }}
             onClick={() => {
-              navigate(`/orderDetail/${item.orderNumber}`);
+              // Note: invoice.orderNumber is always null; the actual BC order ID is in extraFields.bcOrderId
+              const bcOrderId = getBcOrderIdFromInvoice(item.extraFields);
+              if (!bcOrderId) return;
+              const epicorId = getEpicorOrderId(item);
+              const url = epicorId
+                ? `/orderDetail/${bcOrderId}/${epicorId}`
+                : `/orderDetail/${bcOrderId}`;
+              navigate(url);
             }}
           >
             {displayOrderId || '-'}
@@ -284,7 +291,9 @@ export function InvoiceItemCard(props: InvoiceItemCardProps) {
                 wordBreak: 'break-all',
               }}
             >
-              {list?.render ? list.render() : (item as unknown as Record<string, unknown>)[list.key as string]}
+              {list?.render
+                ? list.render()
+                : (item as unknown as Record<string, unknown>)[list.key as string]}
             </Box>
           </Box>
         ))}
