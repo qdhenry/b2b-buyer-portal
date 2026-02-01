@@ -100,7 +100,12 @@ function OrderDetail() {
   const [orderData, setOrderData] = useState<OrderData | null>(null);
 
   // STATLAB CUSTOMIZATION: Initialize custom order data handling
-  const { getDisplayOrderId } = useOrderCustomizations({ order: orderData });
+  const { epicorOrderId: extractedEpicorOrderId, getDisplayOrderId } = useOrderCustomizations({
+    order: orderData,
+  });
+
+  // STATLAB CUSTOMIZATION: Determine if we have any epicorOrderId (from URL or order data)
+  const hasEpicorOrderId = Boolean(epicorOrderId || extractedEpicorOrderId);
 
   // STATLAB CUSTOMIZATION: bcOrderId is always available in URL for reliable API lookups
   useEffect(() => {
@@ -286,23 +291,28 @@ function OrderDetail() {
               order: isMobile ? 1 : 0,
             }}
           >
-            <Typography
-              variant="h4"
-              sx={{
-                color: b3HexToRgb(customColor, 0.87) || '#263238',
-              }}
-            >
-              {/* STATLAB CUSTOMIZATION: Display Epicor Order ID instead of BC Order ID */}
-              {/* Use epicorOrderId from URL params immediately to prevent flash */}
-              {b3Lang('orderDetail.orderId', {
-                orderId: epicorOrderId || getDisplayOrderId(orderId),
-              })}
-              {poNumber &&
-                b3Lang('orderDetail.purchaseOrderNumber', {
-                  purchaseOrderNumber: poNumber,
-                })}
-            </Typography>
-            <OrderStatus code={status} text={getOrderStatusLabel(status)} />
+            {/* STATLAB CUSTOMIZATION: Only show order headline when epicorOrderId exists */}
+            {hasEpicorOrderId && (
+              <>
+                <Typography
+                  variant="h4"
+                  sx={{
+                    color: b3HexToRgb(customColor, 0.87) || '#263238',
+                  }}
+                >
+                  {/* STATLAB CUSTOMIZATION: Display Epicor Order ID instead of BC Order ID */}
+                  {/* Use epicorOrderId from URL params immediately to prevent flash */}
+                  {b3Lang('orderDetail.orderId', {
+                    orderId: epicorOrderId || getDisplayOrderId(orderId),
+                  })}
+                  {poNumber &&
+                    b3Lang('orderDetail.purchaseOrderNumber', {
+                      purchaseOrderNumber: poNumber,
+                    })}
+                </Typography>
+                <OrderStatus code={status} text={getOrderStatusLabel(status)} />
+              </>
+            )}
           </Grid>
           <Grid
             container

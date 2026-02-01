@@ -149,7 +149,7 @@ export class InvoicePdfGenerator {
     y += 5;
     this.doc.setFont('helvetica', 'normal');
     // Static Remit To Address from Reference
-    this.doc.text('*** PILOT 9/8/25', startX, y); // Keeping the text from PDF reference exactly? Or just address?
+    this.doc.text('Statlab Medical Products', startX, y);
     // The PDF says "*** PILOT 9/8/25" which might be a note, but I'll include it or just the address.
     // I'll stick to the address part to be safe, or include all if it looks like address lines.
     // "P.O. Box 678056"
@@ -227,7 +227,7 @@ export class InvoicePdfGenerator {
       this.doc.text(
         `${invoiceBillTo.city}, ${invoiceBillTo.state} ${invoiceBillTo.zip_code}`,
         leftX,
-        billY
+        billY,
       );
       billY += 5;
       this.doc.text(invoiceBillTo.country, leftX, billY);
@@ -270,7 +270,7 @@ export class InvoicePdfGenerator {
       this.doc.text(
         `${invoiceShipTo.city}, ${invoiceShipTo.state} ${invoiceShipTo.zip_code}`,
         rightX,
-        shipY
+        shipY,
       );
       shipY += 5;
       this.doc.text(invoiceShipTo.country, rightX, shipY);
@@ -353,7 +353,6 @@ export class InvoicePdfGenerator {
       getCompanyExtraFieldValue('Customer ID') ||
       this.invoice.customerId ||
       MISSING_DATA_PLACEHOLDER;
-    const customerNumberValue = getCompanyExtraFieldValue('Customer Number');
     const salesRepNameValue =
       getCompanyExtraFieldValue('Sales Rep Name') || MISSING_DATA_PLACEHOLDER;
     const salesRepEmailValue =
@@ -370,10 +369,6 @@ export class InvoicePdfGenerator {
     y += 5;
     this.doc.setFont('helvetica', 'normal');
     this.doc.text(`Invoice Number: ${this.invoice.invoiceNumber}`, col1X, y);
-    if (customerNumberValue) {
-      y += 5;
-      this.doc.text(`Customer Number: ${customerNumberValue}`, col1X, y);
-    }
 
     // Col 2: CUSTOMER ID & SALES REP
     y = startY + 5;
@@ -412,12 +407,10 @@ export class InvoicePdfGenerator {
     y += 4;
     this.doc.text(`${displayFormat(this.invoice.createdAt)}`, col4X, y);
     y += 5;
-    this.doc.text('FOB: Third Party', col4X, y);
-    y += 5;
     // Shipping Via with value on next line
-    this.doc.text('Shipping Via:', col4X, y);
-    y += 4;
-    this.doc.text('FedEx Ground', col4X, y); // Placeholder
+    // this.doc.text('Shipping Via:', col4X, y);
+    // y += 4;
+    // this.doc.text('FedEx Ground', col4X, y);
 
     this.currentY += h + 5;
   }
@@ -471,7 +464,12 @@ export class InvoicePdfGenerator {
     this.doc.rect(PAGE_MARGIN, this.currentY, CONTENT_WIDTH, barHeight, 'S');
 
     // Vertical divider line in center
-    this.doc.line(PAGE_MARGIN + halfWidth, this.currentY, PAGE_MARGIN + halfWidth, this.currentY + barHeight);
+    this.doc.line(
+      PAGE_MARGIN + halfWidth,
+      this.currentY,
+      PAGE_MARGIN + halfWidth,
+      this.currentY + barHeight,
+    );
 
     // Text
     this.doc.setFontSize(11);
@@ -484,9 +482,14 @@ export class InvoicePdfGenerator {
     });
 
     // Sales Order text (centered in right half)
-    this.doc.text(`Sales Order: ${soNumber}`, PAGE_MARGIN + halfWidth + halfWidth / 2, this.currentY + 5.5, {
-      align: 'center',
-    });
+    this.doc.text(
+      `Sales Order: ${soNumber}`,
+      PAGE_MARGIN + halfWidth + halfWidth / 2,
+      this.currentY + 5.5,
+      {
+        align: 'center',
+      },
+    );
 
     this.currentY += barHeight;
 
@@ -727,20 +730,20 @@ export class InvoicePdfGenerator {
     y = Math.max(y, totalY + 40) + 10;
     this.doc.setFontSize(10);
     this.doc.setFont('helvetica', 'bolditalic');
-    this.doc.text('* * *', 30, y + 5);
-    this.doc.text('* * *', 170, y + 5);
+    // this.doc.text('* * *', 30, y + 5);
+    // this.doc.text('* * *', 170, y + 5);
 
-    const warningText = [
-      'Some items associated with this order are either partially filled or',
-      'backordered. Use order search at StatLab.com/ordersearch to identify',
-      'what lines are outstanding and will be shipped and invoiced',
-      'separately.',
-    ];
-    let wy = y;
-    warningText.forEach((line) => {
-      this.doc.text(line, 105, wy, { align: 'center' });
-      wy += 5;
-    });
+    // const warningText = [
+    //   'Some items associated with this order are either partially filled or',
+    //   'backordered. Use order search at StatLab.com/ordersearch to identify',
+    //   'what lines are outstanding and will be shipped and invoiced',
+    //   'separately.',
+    // ];
+    // let wy = y;
+    // warningText.forEach((line) => {
+    //   this.doc.text(line, 105, wy, { align: 'center' });
+    //   wy += 5;
+    // });
 
     // --- Bottom Footer ---
     const bottomY = 285;
@@ -893,7 +896,13 @@ export class InvoicePdfGenerator {
     this.doc.setDrawColor(COLOR_BLACK);
     this.doc.setLineDashPattern([2, 2], 0);
     this.doc.setLineWidth(0.3);
-    this.doc.rect(PAGE_MARGIN, billPaymentStartY, CONTENT_WIDTH, billPaymentEndY - billPaymentStartY, 'S');
+    this.doc.rect(
+      PAGE_MARGIN,
+      billPaymentStartY,
+      CONTENT_WIDTH,
+      billPaymentEndY - billPaymentStartY,
+      'S',
+    );
     this.doc.setLineDashPattern([], 0); // Reset
 
     // --- Bottom Footer ---
@@ -905,7 +914,11 @@ export class InvoicePdfGenerator {
     this.doc.text('Page 2', 190, bottomY, { align: 'right' });
   }
 
-  private drawSectionHeader(title: string, subText: string, iconType: 'clipboard' | 'dollar' = 'dollar') {
+  private drawSectionHeader(
+    title: string,
+    subText: string,
+    iconType: 'clipboard' | 'dollar' = 'dollar',
+  ) {
     const y = this.currentY;
     const h = 8;
 
