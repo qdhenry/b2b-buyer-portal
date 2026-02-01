@@ -39,6 +39,7 @@ const initialState: CompanyState = {
     id: '',
     companyName: '',
     status: CompanyStatus.DEFAULT,
+    extraFields: [],
   },
   customer: {
     id: 0,

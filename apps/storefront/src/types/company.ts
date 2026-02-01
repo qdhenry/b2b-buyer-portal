@@ -1,9 +1,15 @@
 import { PAGES_SUBSIDIARIES_PERMISSION_KEYS } from '@/constants';
 
+export interface ExtraField {
+  fieldName: string;
+  fieldValue: string;
+}
+
 export interface CompanyInfo {
   id: string;
   companyName: string;
   status: number;
+  extraFields?: ExtraField[];
 }
 export interface Customer {
   /**
