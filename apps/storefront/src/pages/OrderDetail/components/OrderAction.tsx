@@ -1,7 +1,7 @@
 import { Fragment, ReactNode, useCallback, useContext, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled from '@emotion/styled';
-import { Box, Card, CardContent, Divider, Typography } from '@mui/material';
+import { Box, Card, CardContent, Divider, SxProps, Typography } from '@mui/material';
 import throttle from 'lodash-es/throttle';
 
 import CustomButton from '@/components/button/CustomButton';
@@ -76,6 +76,7 @@ interface Buttons {
   name: string;
   variant?: 'text' | 'contained' | 'outlined';
   isCanShow: boolean;
+  sx?: SxProps;
 }
 
 interface OrderCardProps {
@@ -267,6 +268,7 @@ function OrderCard(props: OrderCardProps) {
                   key={button.key}
                   name={button.name}
                   variant={button.variant}
+                  sx={button.sx}
                   onClick={throttle(() => {
                     handleOpenDialog(button.name);
                   }, 2000)}
@@ -403,7 +405,10 @@ export function OrderAction(props: OrderActionProps) {
       city,
     } = billingAddress || {};
     const paymentAddress = {
-      paymentMethod: b3Lang('orderDetail.paymentMethod', { paymentMethod: paymentMethod ?? '' }),
+      // STATLAB CUSTOMIZATION: Display "Credit Card" for non-Pay On Account payment methods
+      paymentMethod: b3Lang('orderDetail.paymentMethod', {
+        paymentMethod: paymentMethod === 'Pay On Account' ? 'Pay On Account' : 'Credit Card',
+      }),
       name: b3Lang('orderDetail.customerName', { firstName, lastName }),
       company: getCompanyName(company),
       street: street1,
@@ -518,6 +523,8 @@ export function OrderAction(props: OrderActionProps) {
           isCanShow: isB2BUser
             ? invoiceBtnPermissions && invoiceViewPermission
             : invoiceBtnPermissions,
+          // STATLAB CUSTOMIZATION: Temporarily hidden via CSS - remove sx prop to re-enable
+          sx: { display: 'none' },
         },
       ],
       infos: {
