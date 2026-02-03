@@ -1,4 +1,4 @@
-import { ExtraField } from '@/pages/customizations';
+import { ExtraField } from '@/types/company';
 import { Address as OrderAddress } from '@/types/global';
 
 export interface CompanyInfoTypes {

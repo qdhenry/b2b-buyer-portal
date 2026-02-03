@@ -25,6 +25,8 @@ import {
   getOrdersExtraFieldsProgressive,
   getOrderStatusType,
 } from '../customizations';
+// Import metafield API directly to avoid circular dependency
+import { getEpicorOrderIdsFromMetafieldsProgressive } from '../customizations/api/orderMetafields';
 
 import OrderStatus from './components/OrderStatus';
 import { orderStatusTranslationVariables } from './shared/getOrderStatus';
@@ -173,6 +175,10 @@ function Order({ isCompanyOrder = false }: OrderProps) {
   const [loadingOrderIds, setLoadingOrderIds] = useState<Set<string>>(new Set());
   // Ref to track current page's order IDs to prevent stale updates
   const currentPageOrderIdsRef = useRef<Set<string>>(new Set());
+  // STATLAB CUSTOMIZATION: Store metafield epicor IDs as fallback when not in extraFields
+  const [metafieldEpicorIds, setMetafieldEpicorIds] = useState<Record<string, string>>({});
+  // Track which order IDs are loading metafields
+  const [loadingMetafieldIds, setLoadingMetafieldIds] = useState<Set<string>>(new Set());
 
   const [orderBy, setOrderBy] = useState<OrderBy>({
     key: 'orderId',
@@ -196,6 +202,48 @@ function Order({ isCompanyOrder = false }: OrderProps) {
       };
     });
   };
+
+  // STATLAB CUSTOMIZATION: Fetch metafields as fallback when extraFields don't have epicorOrderId
+  useEffect(() => {
+    // Only proceed when extraFields loading is complete
+    if (loadingOrderIds.size > 0) return;
+    if (currentPageOrderIdsRef.current.size === 0) return;
+
+    // Find orders that don't have epicorOrderId in extraFields
+    const orderIdsNeedingMetafields: string[] = [];
+    currentPageOrderIdsRef.current.forEach((orderId) => {
+      // Check if we already have epicorOrderId from extraFields
+      const extraFields = extraFieldsMap[orderId] || [];
+      const hasEpicorId = extraFields.some((f) => f.fieldName === 'epicorOrderId' && f.fieldValue);
+
+      // Check if we already fetched/are fetching metafield for this order
+      const alreadyHasMetafield = metafieldEpicorIds[orderId] !== undefined;
+      const isLoadingMetafield = loadingMetafieldIds.has(orderId);
+
+      if (!hasEpicorId && !alreadyHasMetafield && !isLoadingMetafield) {
+        orderIdsNeedingMetafields.push(orderId);
+      }
+    });
+
+    if (orderIdsNeedingMetafields.length === 0) return;
+
+    // Mark these orders as loading metafields
+    setLoadingMetafieldIds((prev) => new Set([...prev, ...orderIdsNeedingMetafields]));
+
+    // Fetch metafields progressively
+    getEpicorOrderIdsFromMetafieldsProgressive(orderIdsNeedingMetafields, (accumulated) => {
+      setMetafieldEpicorIds((prev) => ({ ...prev, ...accumulated }));
+      // Remove loaded IDs from loading set
+      setLoadingMetafieldIds((prev) => {
+        const next = new Set(prev);
+        Object.keys(accumulated).forEach((id) => next.delete(id));
+        return next;
+      });
+    }).catch((e) => {
+      b2bLogger.error('Error fetching metafield epicor IDs', e);
+      setLoadingMetafieldIds(new Set());
+    });
+  }, [loadingOrderIds, extraFieldsMap, metafieldEpicorIds, loadingMetafieldIds]);
 
   useEffect(() => {
     const search = isB2BUser
@@ -277,8 +325,10 @@ function Order({ isCompanyOrder = false }: OrderProps) {
         // Track current page's order IDs and set them as loading
         currentPageOrderIdsRef.current = new Set(idsToFetch);
         setLoadingOrderIds(new Set(idsToFetch));
-        // Clear previous extraFields for new page
+        // Clear previous extraFields and metafields for new page
         setExtraFieldsMap({});
+        setMetafieldEpicorIds({});
+        setLoadingMetafieldIds(new Set());
 
         getOrdersExtraFieldsProgressive(idsToFetch, true, (accumulated) => {
           // Only update if these are still the current page's orders
@@ -309,7 +359,10 @@ function Order({ isCompanyOrder = false }: OrderProps) {
       if (idsToFetch.length > 0) {
         currentPageOrderIdsRef.current = new Set(idsToFetch);
         setLoadingOrderIds(new Set(idsToFetch));
+        // Clear previous extraFields and metafields for new page
         setExtraFieldsMap({});
+        setMetafieldEpicorIds({});
+        setLoadingMetafieldIds(new Set());
 
         getOrdersExtraFieldsProgressive(idsToFetch, false, (accumulated) => {
           if (currentPageOrderIdsRef.current.size > 0) {
@@ -346,7 +399,9 @@ function Order({ isCompanyOrder = false }: OrderProps) {
       ...item,
       extraFields: extraFieldsMap[item.orderId] || item.extraFields,
     };
-    const epicorId = getEpicorOrderId(itemWithExtraFields);
+    // First try extraFields, then metafield fallback
+    const epicorId =
+      getEpicorOrderId(itemWithExtraFields) || metafieldEpicorIds[String(item.orderId)] || '';
 
     // Build URL: /orderDetail/{bcOrderId}/{epicorOrderId?}
     const url = epicorId
@@ -379,21 +434,34 @@ function Order({ isCompanyOrder = false }: OrderProps) {
       isSortable: false,
       render: (item) => {
         // STATLAB CUSTOMIZATION: Display Epicor Order ID with skeleton loader
-        const isLoading = loadingOrderIds.has(String(item.orderId));
+        const orderIdStr = String(item.orderId);
+        const isLoadingExtraFields = loadingOrderIds.has(orderIdStr);
+        const isLoadingMetafields = loadingMetafieldIds.has(orderIdStr);
 
-        // Show skeleton while loading - don't show BC order ID
-        if (isLoading) {
+        // Show skeleton while loading extraFields
+        if (isLoadingExtraFields) {
           return <Skeleton variant="text" width={80} height={24} />;
         }
 
+        // First try extraFields
         const itemWithExtraFields = {
           ...item,
           extraFields: extraFieldsMap[item.orderId] || item.extraFields,
         };
-        const epicorId = getEpicorOrderId(itemWithExtraFields);
+        const epicorIdFromExtraFields = getEpicorOrderId(itemWithExtraFields);
 
-        // If we have the Epicor ID, show it; otherwise show ""
-        return epicorId || '';
+        if (epicorIdFromExtraFields) {
+          return epicorIdFromExtraFields;
+        }
+
+        // Show skeleton while loading metafields fallback
+        if (isLoadingMetafields) {
+          return <Skeleton variant="text" width={80} height={24} />;
+        }
+
+        // Fallback to metafield value
+        const epicorIdFromMetafield = metafieldEpicorIds[orderIdStr];
+        return epicorIdFromMetafield || '';
       },
     },
     {

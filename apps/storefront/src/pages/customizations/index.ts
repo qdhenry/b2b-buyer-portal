@@ -17,6 +17,9 @@
 export { useOrderCustomizations, getEpicorOrderId } from './useOrderCustomizations';
 export type { OrderData, UseOrderCustomizationsProps, UseOrderCustomizationsReturn } from './types';
 
+// Note: Order metafield API functions are exported separately to avoid circular dependencies
+// Import directly from: import { getOrderMetafields, getEpicorOrderIdFromMetafields } from '@/pages/customizations/api/orderMetafields';
+
 // Invoice helpers for parsing Epicor lot/pack slip data and fetching order addresses
 export {
   parseEpicorLotPackSlip,

@@ -37,10 +37,16 @@ export interface UseOrderCustomizationsProps {
  */
 export interface UseOrderCustomizationsReturn {
   /**
-   * The Epicor order ID extracted from extraFields or extraInfo
+   * The Epicor order ID extracted from extraFields, extraInfo, or BC metafields
    * Falls back to empty string if not found
    */
   epicorOrderId: string;
+
+  /**
+   * Indicates whether the metafield fetch is in progress
+   * True when async BC metafield lookup is happening
+   */
+  isLoading: boolean;
 
   /**
    * Function to get the display order ID
