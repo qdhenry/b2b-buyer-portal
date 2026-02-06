@@ -5,6 +5,7 @@ import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
 import Typography from '@mui/material/Typography';
 
+import { B3Tag } from '@/components/B3Tag';
 import { isB2BUserSelector, useAppSelector } from '@/store';
 import { currencyFormat } from '@/utils/b3CurrencyFormat';
 import { displayFormat } from '@/utils/b3DateFormat';
@@ -74,7 +75,9 @@ export function OrderItemCard({ item, goToDetail, isLoading = false }: OrderItem
               ) : epicorId ? (
                 `# ${epicorId}`
               ) : (
-                ''
+                <B3Tag color="#9e9e9e" textColor="#fff" fontSize="10px" padding="2px 8px">
+                  <i>In processing</i>
+                </B3Tag>
               )}
             </Typography>
             <Typography

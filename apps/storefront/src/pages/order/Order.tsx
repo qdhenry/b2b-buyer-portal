@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 // STATLAB CUSTOMIZATION: B3Filter hidden - import kept for potential future use
 // import B3Filter from '@/components/filter/B3Filter';
 import B3Spin from '@/components/spin/B3Spin';
+import { B3Tag } from '@/components/B3Tag';
 import { B2BAutoCompleteCheckbox } from '@/components/ui/B2BAutoCompleteCheckbox';
 import { useMobile } from '@/hooks/useMobile';
 import { useB3Lang } from '@/lib/lang';
@@ -150,7 +151,11 @@ function Order({ isCompanyOrder = false }: OrderProps) {
   });
 
   // Wrapper to persist pagination changes
-  const setPagination = (newPagination: { offset: number; first: number } | ((prev: { offset: number; first: number }) => { offset: number; first: number })) => {
+  const setPagination = (
+    newPagination:
+      | { offset: number; first: number }
+      | ((prev: { offset: number; first: number }) => { offset: number; first: number }),
+  ) => {
     setPaginationState((prev) => {
       const next = typeof newPagination === 'function' ? newPagination(prev) : newPagination;
       // Persist perPage preference
@@ -181,7 +186,7 @@ function Order({ isCompanyOrder = false }: OrderProps) {
   const [loadingMetafieldIds, setLoadingMetafieldIds] = useState<Set<string>>(new Set());
 
   const [orderBy, setOrderBy] = useState<OrderBy>({
-    key: 'orderId',
+    key: 'createdAt',
     dir: 'desc',
   });
 
@@ -461,7 +466,13 @@ function Order({ isCompanyOrder = false }: OrderProps) {
 
         // Fallback to metafield value
         const epicorIdFromMetafield = metafieldEpicorIds[orderIdStr];
-        return epicorIdFromMetafield || '';
+        return (
+          epicorIdFromMetafield || (
+            <B3Tag color="#9e9e9e" textColor="#fff" fontSize="11px" padding="2px 8px">
+              <i>In processing</i>
+            </B3Tag>
+          )
+        );
       },
     },
     {
