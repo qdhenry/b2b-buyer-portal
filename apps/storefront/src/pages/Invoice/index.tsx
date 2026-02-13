@@ -532,14 +532,21 @@ function Invoice() {
       }
     });
 
-    if (type === InvoiceListType.DETAIL && invoicesList.length) {
-      invoicesList.forEach((invoice: InvoiceListNode) => {
+    // STATLAB CUSTOMIZATION: Hide invoices not yet processed by ERP (no EpicorOrderId)
+    const filteredInvoices = invoicesList.filter((invoiceNode: InvoiceListNode) => {
+      const epicorId = getEpicorOrderId(invoiceNode.node);
+      return epicorId !== '';
+    });
+    const filteredCount = totalCount - (invoicesList.length - filteredInvoices.length);
+
+    if (type === InvoiceListType.DETAIL && filteredInvoices.length) {
+      filteredInvoices.forEach((invoice: InvoiceListNode) => {
         const item = invoice;
         item.node.isCollapse = true;
       });
     }
 
-    invoicesList.forEach((invoiceNode: InvoiceListNode) => {
+    filteredInvoices.forEach((invoiceNode: InvoiceListNode) => {
       const {
         node: { openBalance },
       } = invoiceNode;
@@ -557,18 +564,18 @@ function Invoice() {
           !invoiceSubPayPermission || Number(openBalance.value) === 0;
       }
     });
-    setList(invoicesList);
+    setList(filteredInvoices);
     handleStatisticsInvoiceAmount();
 
-    if (filterData && isFiltering(filterData) && invoicesList.length) {
-      cacheFilterLists(invoicesList);
+    if (filterData && isFiltering(filterData) && filteredInvoices.length) {
+      cacheFilterLists(filteredInvoices);
     } else {
       setFilterLists([]);
     }
 
     return {
-      edges: invoicesList,
-      totalCount,
+      edges: filteredInvoices,
+      totalCount: filteredCount,
     };
   };
 
