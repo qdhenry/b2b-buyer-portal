@@ -1,5 +1,6 @@
 import { useContext, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import InfoOutlined from '@mui/icons-material/InfoOutlined';
 import { Box, Button, InputAdornment, TextField, Typography } from '@mui/material';
 import cloneDeep from 'lodash-es/cloneDeep';
 
@@ -35,7 +36,6 @@ import {
 
 import B3Pulldown from './components/B3Pulldown';
 import InvoiceFooter from './components/InvoiceFooter';
-import InvoiceStatus from './components/InvoiceStatus';
 import PaymentsHistory from './components/PaymentsHistory';
 import PaymentSuccess from './components/PaymentSuccess';
 import PrintTemplate from './components/PrintTemplate';
@@ -800,22 +800,6 @@ function Invoice() {
       width: '15%',
     },
     {
-      key: 'status',
-      title: b3Lang('invoice.headers.status'),
-      isSortable: true,
-      render: (item: InvoiceList) => {
-        const { status, dueDate } = item;
-        let code = item.status;
-
-        // (3, "Overdue")-【Display status when invoice exceeds due date. For front-end display only】
-        if (status === 0 && currentDate > dueDate * 1000) {
-          code = 3;
-        }
-
-        return <InvoiceStatus code={code} />;
-      },
-    },
-    {
       key: 'invoiceActions',
       title: b3Lang('invoice.headers.action'),
       render: (row: InvoiceList) => {
@@ -907,6 +891,35 @@ function Invoice() {
           position: 'relative',
         }}
       >
+        <Box
+          sx={{
+            marginBottom: '24px',
+            padding: '12px 16px',
+            borderRadius: '4px',
+            backgroundColor: '#0288D1',
+            display: 'flex',
+            alignItems: 'flex-start',
+          }}
+        >
+          <InfoOutlined
+            sx={{
+              color: '#FFFFFF',
+              mt: '2px',
+              flexShrink: 0,
+            }}
+          />
+          <Typography
+            sx={{
+              color: '#FFFFFF',
+              marginLeft: '8px',
+              fontSize: '14px',
+            }}
+          >
+            Invoices for all orders placed after February 19th are available here, reflecting the
+            final invoice amount after your order is shipped. Please contact StatLab customer service
+            to request invoices for website orders placed prior to February 19th.
+          </Typography>
+        </Box>
         <Box
           sx={{
             display: 'flex',
