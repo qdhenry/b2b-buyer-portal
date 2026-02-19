@@ -5,7 +5,7 @@ import { InsertDriveFile } from '@mui/icons-material';
 import { Alert, Box, Link, useTheme } from '@mui/material';
 import Grid from '@mui/material/Unstable_Grid2';
 
-import useMobile from '@/hooks/useMobile';
+import { useMobile } from '@/hooks/useMobile';
 import {
   B2BProductsBulkUploadCSV,
   BcProductsBulkUploadCSV,
@@ -13,8 +13,8 @@ import {
 } from '@/shared/service/b2b';
 import { defaultCurrencyInfoSelector, isB2BUserSelector, useAppSelector } from '@/store';
 import { Currency } from '@/types';
-import { channelId } from '@/utils';
 import b2bLogger from '@/utils/b3Logger';
+import { channelId } from '@/utils/basicConfig';
 
 import B3Dialog from '../B3Dialog';
 import CustomButton from '../button/CustomButton';
@@ -56,7 +56,7 @@ const FileUploadContainer = styled(Box)({
   },
 });
 
-export default function B3Upload(props: B3UploadProps) {
+export function B3Upload(props: B3UploadProps) {
   const {
     isOpen,
     setIsOpen,

@@ -11,13 +11,14 @@ import { ArrowUpward as ArrowUpwardIcon } from '@mui/icons-material';
 import { Box, Card, CardContent, TextField, Tooltip, useTheme } from '@mui/material';
 import { format, formatDistanceStrict } from 'date-fns';
 
-import { B3CollapseContainer } from '@/components';
+import { B3CollapseContainer } from '@/components/B3CollapseContainer';
 import B3Spin from '@/components/spin/B3Spin';
 import { useB3Lang } from '@/lib/lang';
 import { GlobalContext } from '@/shared/global';
 import { updateQuote } from '@/shared/service/b2b';
 import { rolePermissionSelector, useAppSelector } from '@/store';
-import { displayExtendedFormat, storeHash } from '@/utils';
+import { displayExtendedFormat } from '@/utils/b3DateFormat';
+import { storeHash } from '@/utils/basicConfig';
 
 interface MessageProps {
   date?: number;

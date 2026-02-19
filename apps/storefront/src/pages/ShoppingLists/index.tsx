@@ -5,7 +5,9 @@ import B3Dialog from '@/components/B3Dialog';
 import B3Filter from '@/components/filter/B3Filter';
 import B3Spin from '@/components/spin/B3Spin';
 import { B3PaginationTable, GetRequestList } from '@/components/table/B3PaginationTable';
-import { useCardListColumn, useMobile, useTableRef } from '@/hooks';
+import { useCardListColumn } from '@/hooks/useCardListColumn';
+import { useMobile } from '@/hooks/useMobile';
+import { useTableRef } from '@/hooks/useTableRef';
 import { useB3Lang } from '@/lib/lang';
 import { GlobalContext } from '@/shared/global';
 import {
@@ -15,7 +17,8 @@ import {
 } from '@/shared/service/b2b';
 import { isB2BUserSelector, rolePermissionSelector, useAppSelector } from '@/store';
 import { ShoppingListStatus } from '@/types/shoppingList';
-import { channelId, snackbar } from '@/utils';
+import { snackbar } from '@/utils/b3Tip';
+import { channelId } from '@/utils/basicConfig';
 
 import AddEditShoppingLists from './AddEditShoppingLists';
 import { ShoppingListSearch, ShoppingListsItemsProps, useGetFilterMoreList } from './config';

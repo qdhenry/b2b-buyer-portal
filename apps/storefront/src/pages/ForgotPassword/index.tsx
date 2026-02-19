@@ -3,11 +3,12 @@ import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { Box, ImageListItem, Typography } from '@mui/material';
 
-import { B3Card, B3CustomForm } from '@/components';
+import { B3Card } from '@/components/B3Card';
+import { B3CustomForm } from '@/components/B3CustomForm';
 import CustomButton from '@/components/button/CustomButton';
-import { Captcha } from '@/components/form';
+import { Captcha } from '@/components/captcha/Captcha';
 import B3Spin from '@/components/spin/B3Spin';
-import { useMobile } from '@/hooks';
+import { useMobile } from '@/hooks/useMobile';
 import { useB3Lang } from '@/lib/lang';
 import { CustomStyleContext } from '@/shared/customStyleButton';
 import { GlobalContext } from '@/shared/global';

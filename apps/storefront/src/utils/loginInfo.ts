@@ -95,10 +95,16 @@ export const getCompanyInfo = async (
   id?: number,
   userType = UserTypes.MULTIPLE_B2C,
 ) => {
-  let companyInfo = {
+  let companyInfo: {
+    id: string;
+    companyName: string;
+    companyStatus: CompanyStatus;
+    extraFields?: Array<{ fieldName: string; fieldValue: string }>;
+  } = {
     id: '',
     companyName: '',
     companyStatus: CompanyStatus.DEFAULT,
+    extraFields: [],
   };
 
   const { B2BToken } = store.getState().company.tokens;
@@ -106,6 +112,9 @@ export const getCompanyInfo = async (
 
   if (id && userType === UserTypes.MULTIPLE_B2C && Number(role) !== CustomerRole.SUPER_ADMIN) {
     const { userCompany } = await getUserCompany(id);
+
+    // DEBUG: Log raw userCompany from API
+    console.log('[getCompanyInfo] userCompany from getUserCompany API:', userCompany);
 
     if (userCompany) {
       companyInfo = {
@@ -186,17 +195,20 @@ const getCompanyUserInfo = async () => {
 
 const loginWithCurrentCustomerJWT = async () => {
   const prevCurrentCustomerJWT = store.getState().company.tokens.currentCustomerJWT;
-  let currentCustomerJWT;
-  try {
-    currentCustomerJWT = await getCurrentCustomerJWT(getAppClientId());
-  } catch (error) {
-    b2bLogger.error(error);
+  const currentCustomerJWT = await getCurrentCustomerJWT(getAppClientId()).catch((error) => {
+    // eslint-disable-next-line no-console
+    console.error(error);
     return undefined;
-  }
+  });
 
   if (!currentCustomerJWT || prevCurrentCustomerJWT === currentCustomerJWT) return undefined;
 
-  const data = await getB2BToken(currentCustomerJWT, channelId);
+  const data = await getB2BToken(currentCustomerJWT, channelId).catch((error) => {
+    // eslint-disable-next-line no-console
+    console.error('Failed to get B2B token:', error);
+    throw error;
+  });
+
   const B2BToken = data.authorization.result.token as string;
   const newLoginType = data.authorization.result.loginType as LoginTypes;
 
@@ -226,7 +238,11 @@ export const getCurrentCustomerInfo = async (
   let loginType = LoginTypes.GENERAL_LOGIN;
 
   if (!b2bToken && !B2BToken) {
-    const data = await loginWithCurrentCustomerJWT();
+    const data = await loginWithCurrentCustomerJWT().catch((error) => {
+      // eslint-disable-next-line no-console
+      console.error('Failed to login with current customer JWT:', error);
+      throw error;
+    });
     if (!data) return undefined;
     loginType = data.newLoginType;
   }
@@ -287,7 +303,12 @@ export const getCurrentCustomerInfo = async (
         id: companyInfo.id,
         status: companyInfo.companyStatus,
         companyName: companyInfo.companyName,
+        extraFields: companyInfo.extraFields || [],
       };
+
+      // DEBUG: Log companyInfo and companyPayload
+      console.log('[loginInfo] companyInfo from API:', companyInfo);
+      console.log('[loginInfo] companyPayload to Redux:', companyPayload);
 
       const { featureFlags } = store.getState().global;
       const useCombinedQuery =

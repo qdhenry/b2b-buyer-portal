@@ -1,7 +1,7 @@
 import { Fragment, ReactNode, useCallback, useContext, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled from '@emotion/styled';
-import { Box, Card, CardContent, Divider, Typography } from '@mui/material';
+import { Box, Card, CardContent, Divider, SxProps, Typography } from '@mui/material';
 import throttle from 'lodash-es/throttle';
 
 import CustomButton from '@/components/button/CustomButton';
@@ -10,15 +10,12 @@ import HierarchyDialog from '@/pages/CompanyHierarchy/components/HierarchyDialog
 import { GlobalContext } from '@/shared/global';
 import { isB2BUserSelector, rolePermissionSelector, useAppSelector } from '@/store';
 import { Address, MoneyFormat, OrderProductItem } from '@/types';
-import {
-  b2bPrintInvoice,
-  currencyFormat,
-  displayFormat,
-  ordersCurrencyFormat,
-  snackbar,
-  verifyLevelPermission,
-} from '@/utils';
+import { verifyLevelPermission } from '@/utils/b3CheckPermissions/check';
 import { b2bPermissionsMap } from '@/utils/b3CheckPermissions/config';
+import { currencyFormat, ordersCurrencyFormat } from '@/utils/b3CurrencyFormat';
+import { displayFormat } from '@/utils/b3DateFormat';
+import { b2bPrintInvoice } from '@/utils/b3PrintInvoice';
+import { snackbar } from '@/utils/b3Tip';
 
 import { OrderDetailsContext, OrderDetailsState } from '../context/OrderDetailsContext';
 
@@ -79,6 +76,7 @@ interface Buttons {
   name: string;
   variant?: 'text' | 'contained' | 'outlined';
   isCanShow: boolean;
+  sx?: SxProps;
 }
 
 interface OrderCardProps {
@@ -270,6 +268,7 @@ function OrderCard(props: OrderCardProps) {
                   key={button.key}
                   name={button.name}
                   variant={button.variant}
+                  sx={button.sx}
                   onClick={throttle(() => {
                     handleOpenDialog(button.name);
                   }, 2000)}
@@ -321,7 +320,7 @@ interface OrderData {
   infos: Infos | string;
 }
 
-export default function OrderAction(props: OrderActionProps) {
+export function OrderAction(props: OrderActionProps) {
   const { detailsData, isCurrentCompany } = props;
   const b3Lang = useB3Lang();
   const isB2BUser = useAppSelector(isB2BUserSelector);
@@ -333,7 +332,7 @@ export default function OrderAction(props: OrderActionProps) {
   } = useContext(GlobalContext);
 
   const {
-    state: { addressLabelPermission, createdEmail },
+    state: { addressLabelPermission },
   } = useContext(OrderDetailsContext);
 
   const {
@@ -347,6 +346,7 @@ export default function OrderAction(props: OrderActionProps) {
     invoiceId,
     poNumber,
     customerId,
+    createdEmail,
     companyInfo: { companyId } = {},
   } = detailsData;
 
@@ -373,6 +373,7 @@ export default function OrderAction(props: OrderActionProps) {
 
   const { purchasabilityPermission, shoppingListCreateActionsPermission } = b2bPermissions;
   const { getInvoicesPermission } = b2bPermissionsMap;
+
   const invoiceViewPermission = verifyLevelPermission({
     code: getInvoicesPermission,
     companyId: companyId ? Number(companyId) : 0,
@@ -404,7 +405,10 @@ export default function OrderAction(props: OrderActionProps) {
       city,
     } = billingAddress || {};
     const paymentAddress = {
-      paymentMethod: b3Lang('orderDetail.paymentMethod', { paymentMethod: paymentMethod ?? '' }),
+      // STATLAB CUSTOMIZATION: Display "Credit Card" for non-Pay On Account payment methods
+      paymentMethod: b3Lang('orderDetail.paymentMethod', {
+        paymentMethod: paymentMethod === 'Pay On Account' ? 'Pay On Account' : 'Credit Card',
+      }),
       name: b3Lang('orderDetail.customerName', { firstName, lastName }),
       company: getCompanyName(company),
       street: street1,
@@ -422,13 +426,26 @@ export default function OrderAction(props: OrderActionProps) {
   const handleOrderComments = (value: string) => {
     const commentsArr = value.split(/\n/g);
 
+    // Filter out internal data lines not for display
+    const filteredComments = commentsArr.filter((item) => {
+      const trimmedLower = item.trim().toLowerCase();
+      // Regex to match webhookProcessed: false (with optional spacing)
+      const webhookProcessedRegex = /^webhookprocessed:\s*false$/i;
+
+      return (
+        !trimmedLower.startsWith('epicororderid:') &&
+        !trimmedLower.startsWith('epicoreorderid:') &&
+        !webhookProcessedRegex.test(item.trim())
+      );
+    });
+
     const comments: {
       [k: string]: string;
     } = {};
 
     const dividingLine = ['-------------------------------------'];
 
-    commentsArr.forEach((item, index) => {
+    filteredComments.forEach((item, index) => {
       if (item.trim().length > 0) {
         const isHaveTitle = item.trim().includes(':');
 
@@ -474,6 +491,7 @@ export default function OrderAction(props: OrderActionProps) {
   ];
 
   const invoiceBtnPermissions = Number(ipStatus) !== 0 || createdEmail === emailAddress;
+
   const orderData: OrderData[] = [
     {
       header: b3Lang('orderDetail.summary'),
@@ -505,6 +523,8 @@ export default function OrderAction(props: OrderActionProps) {
           isCanShow: isB2BUser
             ? invoiceBtnPermissions && invoiceViewPermission
             : invoiceBtnPermissions,
+          // STATLAB CUSTOMIZATION: Temporarily hidden via CSS - remove sx prop to re-enable
+          sx: { display: 'none' },
         },
       ],
       infos: {

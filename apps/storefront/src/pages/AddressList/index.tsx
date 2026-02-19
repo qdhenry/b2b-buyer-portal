@@ -4,7 +4,9 @@ import { Box } from '@mui/material';
 import B3Filter from '@/components/filter/B3Filter';
 import B3Spin from '@/components/spin/B3Spin';
 import { B3PaginationTable, GetRequestList } from '@/components/table/B3PaginationTable';
-import { useCardListColumn, useTableRef, useVerifyCreatePermission } from '@/hooks';
+import { useCardListColumn } from '@/hooks/useCardListColumn';
+import { useTableRef } from '@/hooks/useTableRef';
+import { useVerifyCreatePermission } from '@/hooks/useVerifyPermission';
 import { useB3Lang } from '@/lib/lang';
 import { GlobalContext } from '@/shared/global';
 import {
@@ -15,8 +17,9 @@ import {
 } from '@/shared/service/b2b';
 import { isB2BUserSelector, useAppSelector } from '@/store';
 import { CustomerRole } from '@/types';
-import { b2bPermissionsMap, snackbar } from '@/utils';
+import { b2bPermissionsMap } from '@/utils/b3CheckPermissions/config';
 import b2bLogger from '@/utils/b3Logger';
+import { snackbar } from '@/utils/b3Tip';
 
 import { AddressItemType, BCAddressItemType } from '../../types/address';
 

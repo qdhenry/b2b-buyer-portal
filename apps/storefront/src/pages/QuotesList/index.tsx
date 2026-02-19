@@ -6,7 +6,8 @@ import B3Filter from '@/components/filter/B3Filter';
 import B3Spin from '@/components/spin/B3Spin';
 import { B3PaginationTable, GetRequestList } from '@/components/table/B3PaginationTable';
 import { TableColumnItem } from '@/components/table/B3Table';
-import { useMobile, useSort } from '@/hooks';
+import { useMobile } from '@/hooks/useMobile';
+import { useSort } from '@/hooks/useSort';
 import { useB3Lang } from '@/lib/lang';
 import { GlobalContext } from '@/shared/global';
 import {
@@ -15,7 +16,9 @@ import {
   getShoppingListsCreatedByUser,
 } from '@/shared/service/b2b';
 import { isB2BUserSelector, useAppSelector } from '@/store';
-import { channelId, currencyFormatConvert, displayFormat } from '@/utils';
+import { currencyFormatConvert } from '@/utils/b3CurrencyFormat';
+import { displayFormat } from '@/utils/b3DateFormat';
+import { channelId } from '@/utils/basicConfig';
 
 import QuoteStatus from '../quote/components/QuoteStatus';
 import { addPrice } from '../quote/shared/config';
@@ -309,7 +312,8 @@ function QuotesList() {
     if (Number(status) === 0) {
       navigate('/quoteDraft');
     } else {
-      navigate(`/quoteDetail/${item.id}?date=${item.createdAt}`);
+      const uuidParam = item.uuid ? `&uuid=${item.uuid}` : '';
+      navigate(`/quoteDetail/${item.id}?date=${item.createdAt}${uuidParam}`);
     }
   };
 

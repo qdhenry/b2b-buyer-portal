@@ -1,16 +1,14 @@
 import { useContext, useEffect, useRef } from 'react';
 import Cookies from 'js-cookie';
 
-import { HeadlessRoutes } from '@/constants';
+import { HeadlessRoute, HeadlessRoutes } from '@/constants';
 import { addProductFromPage as addProductFromPageToShoppingList } from '@/hooks/dom/useOpenPDP';
 import { addProductsFromCartToQuote, addProductsToDraftQuote } from '@/hooks/dom/utils';
 import { setElementsListenersConfig } from '@/lib/config';
 import { useB3Lang } from '@/lib/lang';
-import {
-  addProductsToShoppingList,
-  addProductsToShoppingListErrorHandler,
-  useAddedToShoppingListAlert,
-} from '@/pages/PDP';
+import { addProductsToShoppingList } from '@/pages/PDP/addProductsToShoppingList';
+import { addProductsToShoppingListErrorHandler } from '@/pages/PDP/addProductsToShoppingListErrorHandler';
+import { useAddedToShoppingListAlert } from '@/pages/PDP/useAddedToShoppingListAlert';
 import { type SetOpenPage } from '@/pages/SetOpenPage';
 import { ShoppingListsItemsProps } from '@/pages/ShoppingLists/config';
 import { CustomStyleContext } from '@/shared/customStyleButton';
@@ -26,13 +24,14 @@ import {
   useAppStore,
 } from '@/store';
 import { setB2BToken } from '@/store/slices/company';
-import { channelId } from '@/utils';
+import { QuoteItem } from '@/types/quotes';
 import CallbackManager from '@/utils/b3CallbackManager';
 import b2bLogger from '@/utils/b3Logger';
 import { logoutSession } from '@/utils/b3logout';
 import { LineItem } from '@/utils/b3Product/b3Product';
 import createShoppingList from '@/utils/b3ShoppingList/b3ShoppingList';
 import b3TriggerCartNumber from '@/utils/b3TriggerCartNumber';
+import { channelId } from '@/utils/basicConfig';
 import { getCurrentCustomerInfo } from '@/utils/loginInfo';
 import { endMasquerade, startMasquerade } from '@/utils/masquerade';
 
@@ -41,6 +40,16 @@ import { getSku } from './getSku';
 interface HeadlessControllerProps {
   setOpenPage: SetOpenPage;
 }
+
+export interface FormattedQuoteItem
+  extends Omit<QuoteItem['node'], 'optionList' | 'calculatedValue' | 'productsSearch'> {
+  optionSelections: {
+    optionId: string | number;
+    optionValue: number;
+  }[];
+}
+
+export type ProductMappedAttributes = ReturnType<typeof transformOptionSelectionsToAttributes>;
 
 const transformOptionSelectionsToAttributes = (items: LineItem[]) =>
   items.map((product) => {
@@ -135,7 +144,7 @@ export default function HeadlessController({ setOpenPage }: HeadlessControllerPr
       callbacks: Manager,
       utils: {
         getRoutes: () => getAllowedRoutesWithoutComponent(globalState),
-        openPage: (page: keyof typeof HeadlessRoutes) =>
+        openPage: (page: HeadlessRoute) =>
           setTimeout(() => {
             if (page === 'CLOSE') {
               setOpenPage({ isOpen: false });

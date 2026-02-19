@@ -1,7 +1,8 @@
 import { LangFormatFunction } from '@/lib/lang';
 import { LoginFlagType, LoginTypeConfig } from '@/types/login';
-import { BigCommerceStorefrontAPIBaseURL, validatorRules } from '@/utils';
 import b2bLogger from '@/utils/b3Logger';
+import { BigCommerceStorefrontAPIBaseURL } from '@/utils/basicConfig';
+import { validatorRules } from '@/utils/validatorRules';
 
 export type LoginConfig = {
   email: string;
@@ -110,6 +111,22 @@ export const loginType: LoginTypeConfig = {
   invoiceErrorTip: {
     alertType: 'error',
     tip: 'login.loginText.invoiceErrorTip',
+  },
+  pendingApprovalToViewPrices: {
+    alertType: 'error',
+    tip: 'global.statusNotifications.willGainAccessToBusinessFeatProductsAndPricingAfterApproval',
+  },
+  pendingApprovalToOrder: {
+    alertType: 'error',
+    tip: 'global.statusNotifications.productsPricingAndOrderingWillBeEnabledAfterApproval',
+  },
+  pendingApprovalToAccessFeatures: {
+    alertType: 'error',
+    tip: 'global.statusNotifications.willGainAccessToBusinessFeatAfterApproval',
+  },
+  accountInactive: {
+    alertType: 'error',
+    tip: 'global.statusNotifications.businessAccountInactive',
   },
 };
 

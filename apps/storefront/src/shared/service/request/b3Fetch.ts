@@ -1,7 +1,8 @@
 import Cookies from 'js-cookie';
 
 import { store } from '@/store';
-import { BigCommerceStorefrontAPIBaseURL, channelId, snackbar, storeHash } from '@/utils';
+import { snackbar } from '@/utils/b3Tip';
+import { BigCommerceStorefrontAPIBaseURL, channelId, storeHash } from '@/utils/basicConfig';
 
 import { getAPIBaseURL, queryParse, RequestType, RequestTypeKeys } from './base';
 import b3Fetch from './fetch';
@@ -162,10 +163,14 @@ const B3Request = {
   get: function get<T, Y>(url: string, type: RequestTypeKeys, data?: T, config?: Y): Promise<any> {
     if (data) {
       const params = queryParse(data);
-      return request(`${url}?${params}`, {
-        method: 'GET',
-        ...config,
-      });
+      return request(
+        `${url}?${params}`,
+        {
+          method: 'GET',
+          ...config,
+        },
+        type,
+      );
     }
     return request(
       url,
@@ -224,4 +229,7 @@ const B3Request = {
   },
 };
 
+type B3RequestType = typeof B3Request;
 export default B3Request;
+
+export type { B3RequestType };

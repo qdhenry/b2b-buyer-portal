@@ -1,12 +1,13 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Box, Grid } from '@mui/material';
+import { Box, Button, Grid } from '@mui/material';
 import copy from 'copy-to-clipboard';
 import { get } from 'lodash-es';
 
 import B3Spin from '@/components/spin/B3Spin';
-import { useMobile } from '@/hooks';
-import useScrollBar from '@/hooks/useScrollBar';
+import { useFeatureFlags } from '@/hooks/useFeatureFlags';
+import { useMobile } from '@/hooks/useMobile';
+import { useScrollBar } from '@/hooks/useScrollBar';
 import { useB3Lang } from '@/lib/lang';
 import { GlobalContext } from '@/shared/global';
 import {
@@ -23,15 +24,16 @@ import {
   useAppSelector,
 } from '@/store';
 import { QuoteExtraFieldsData } from '@/types/quotes';
-import { snackbar, verifyLevelPermission } from '@/utils';
+import { verifyLevelPermission } from '@/utils/b3CheckPermissions/check';
 import { b2bPermissionsMap } from '@/utils/b3CheckPermissions/config';
 import { getVariantInfoOOSAndPurchase } from '@/utils/b3Product/b3Product';
 import { conversionProductsList } from '@/utils/b3Product/shared/config';
+import { snackbar } from '@/utils/b3Tip';
 import { getSearchVal } from '@/utils/loginInfo';
+import { ValidatedProductError, validateProducts } from '@/utils/validateProducts';
 
 import Message from '../quote/components/Message';
 import QuoteAttachment from '../quote/components/QuoteAttachment';
-import QuoteDetailFooter from '../quote/components/QuoteDetailFooter';
 import QuoteDetailHeader from '../quote/components/QuoteDetailHeader';
 import QuoteDetailSummary from '../quote/components/QuoteDetailSummary';
 import QuoteDetailTable from '../quote/components/QuoteDetailTable';
@@ -109,9 +111,11 @@ function useData() {
     const { search } = location;
 
     const date = getSearchVal(search, 'date') || '';
+    const uuid = getSearchVal(search, 'uuid') || '';
     const data = {
       id: Number(id),
       date: date.toString(),
+      uuid: uuid ? uuid.toString() : undefined,
     };
 
     const { quote } = await (Number(role) === 99
@@ -137,6 +141,62 @@ function useData() {
     handleGetProductsById,
     getQuote,
   };
+}
+
+const containerStyle = (isMobile: boolean) => {
+  return isMobile
+    ? {
+        alignItems: 'flex-end',
+        flexDirection: 'column',
+      }
+    : {
+        alignItems: 'center',
+      };
+};
+
+function Footer({ children, isAgenting }: { children: React.ReactNode; isAgenting: boolean }) {
+  const [isMobile] = useMobile();
+  return (
+    <Box
+      sx={{
+        position: 'fixed',
+        bottom: isMobile && isAgenting ? '52px' : 0,
+        left: 0,
+        backgroundColor: '#fff',
+        width: '100%',
+        padding: '0.8rem 1rem',
+        height: 'auto',
+        display: 'flex',
+        zIndex: '999',
+        justifyContent: isMobile ? 'center' : 'flex-end',
+        displayPrint: 'none',
+        ...containerStyle(isMobile),
+      }}
+    >
+      {children}
+    </Box>
+  );
+}
+
+function ProceedToCheckoutButton({
+  children,
+  onClick,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+}) {
+  const [isMobile] = useMobile();
+  return (
+    <Button
+      variant="contained"
+      onClick={onClick}
+      sx={{
+        width: isMobile ? '100%' : 'auto',
+      }}
+    >
+      {children}
+    </Button>
+  );
 }
 
 function QuoteDetail() {
@@ -166,9 +226,11 @@ function QuoteDetail() {
   const [quoteDetail, setQuoteDetail] = useState<any>({});
   const [productList, setProductList] = useState<any>([]);
   const [fileList, setFileList] = useState<any>([]);
-  const [isHandleApprove, setHandleApprove] = useState<boolean>(false);
+  const [quoteReviewedBySalesRep, setQuoteWasReviewedBySalesRep] = useState<boolean>(false);
 
   const [isHideQuoteCheckout, setIsHideQuoteCheckout] = useState<boolean>(true);
+  const [quoteValidationErrors, setQuoteValidationErrors] = useState<ValidatedProductError[]>([]);
+  const [quoteHasWarnings, setQuoteHasWarnings] = useState<boolean>(true);
 
   const [quoteSummary, setQuoteSummary] = useState<any>({
     originalSubtotal: 0,
@@ -192,7 +254,17 @@ function QuoteDetail() {
 
   const [quoteCheckoutLoading, setQuoteCheckoutLoading] = useState<boolean>(false);
 
+  const [shouldHidePrices, setShouldHidePrices] = useState<boolean>(true);
+
   const location = useLocation();
+
+  const featureFlags = useFeatureFlags();
+
+  const isMoveStockAndBackorderValidationToBackend =
+    featureFlags['B2B-3318.move_stock_and_backorder_validation_to_backend'];
+
+  const isAutoQuotingEnabled =
+    quoteConfig.find((item) => item.key === 'quote_auto_quoting')?.value === '1';
 
   useEffect(() => {
     if (!quoteDetail?.id) return;
@@ -228,7 +300,29 @@ function QuoteDetail() {
     });
   }, [isB2BUser, quoteDetail, selectCompanyHierarchyId, purchasabilityPermission]);
 
-  useEffect(() => {
+  const quoteDetailBackendValidations = async () => {
+    if (!productList.length) return;
+    const { error, warning } = await validateProducts(productList);
+
+    if (!error.length && !warning.length) {
+      setShouldHidePrices(false);
+      setQuoteHasWarnings(false);
+    }
+
+    error.forEach((err) => {
+      if (err.error.type === 'validation') {
+        snackbar.error(err.error.message);
+      }
+    });
+
+    if (quoteReviewedBySalesRep) {
+      setShouldHidePrices(false);
+    }
+
+    setQuoteValidationErrors(error);
+  };
+
+  const quoteDetailFrontendValidations = () => {
     let oosErrorList = '';
     let nonPurchasableErrorList = '';
 
@@ -247,7 +341,7 @@ function QuoteDetail() {
     });
 
     const isHideCheckout = !!oosErrorList || !!nonPurchasableErrorList;
-    if (isEnableProduct && isHandleApprove && isHideCheckout) {
+    if (isEnableProduct && quoteReviewedBySalesRep && isHideCheckout) {
       if (oosErrorList)
         snackbar.error(
           b3Lang('quoteDetail.message.insufficientStock', {
@@ -269,11 +363,39 @@ function QuoteDetail() {
       oos: oosErrorList,
       nonPurchasable: nonPurchasableErrorList,
     });
+  };
+
+  const validateQuoteProducts = isMoveStockAndBackorderValidationToBackend
+    ? quoteDetailBackendValidations
+    : quoteDetailFrontendValidations;
+
+  const hasQuoteValidationErrorsBackendFlow = () => {
+    if (quoteValidationErrors.length) {
+      quoteValidationErrors.forEach((err) => {
+        if (err.error.type === 'network') {
+          snackbar.error(
+            b3Lang('quotes.productValidationFailed', {
+              productName: err.product.node?.productName || '',
+            }),
+          );
+        } else {
+          snackbar.error(err.error.message);
+        }
+      });
+
+      return true;
+    }
+
+    return false;
+  };
+
+  useEffect(() => {
+    validateQuoteProducts();
     // disabling since b3Lang is a dependency that will trigger rendering issues
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isEnableProduct, isHandleApprove, productList]);
+  }, [isEnableProduct, quoteReviewedBySalesRep, productList]);
 
-  const proceedingCheckoutFn = useCallback(() => {
+  const hasQuoteValidationErrorsFrontendFlow = useCallback(() => {
     if (isHideQuoteCheckout) {
       const { oos, nonPurchasable } = noBuyerProductName;
       if (oos)
@@ -294,6 +416,10 @@ function QuoteDetail() {
     // disabling as b3Lang is a dependency that will trigger rendering issues
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHideQuoteCheckout, noBuyerProductName]);
+
+  const hasQuoteValidationErrors = isMoveStockAndBackorderValidationToBackend
+    ? hasQuoteValidationErrorsBackendFlow
+    : hasQuoteValidationErrorsFrontendFlow;
 
   const classRates: TaxZoneRates[] = [];
   if (taxZoneRates?.length) {
@@ -390,7 +516,7 @@ function QuoteDetail() {
         salesRepEmail,
       } = quote;
 
-      setHandleApprove(!!salesRep || !!salesRepEmail);
+      setQuoteWasReviewedBySalesRep(!!salesRep || !!salesRepEmail);
 
       const newFileList: CustomFieldItems[] = [];
       storefrontAttachFiles.forEach((file: CustomFieldItems) => {
@@ -421,9 +547,11 @@ function QuoteDetail() {
       setFileList(newFileList);
 
       return quote;
-    } catch (err: any) {
-      snackbar.error(err);
-      throw err;
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        snackbar.error(error.message);
+      }
+      throw error;
     } finally {
       setIsRequestLoading(false);
       setIsShowFooter(true);
@@ -449,8 +577,10 @@ function QuoteDetail() {
           content: quotePdf.quoteFrontendPdf.content,
         };
       }
-    } catch (err: any) {
-      snackbar.error(err);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        snackbar.error(error.message);
+      }
     }
     return {
       url: '',
@@ -464,8 +594,10 @@ function QuoteDetail() {
       if (quotePdfUrl) {
         window.open(`${quotePdfUrl}`, '_blank');
       }
-    } catch (err: any) {
-      snackbar.error(err);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        snackbar.error(error.message);
+      }
     } finally {
       setIsRequestLoading(false);
     }
@@ -483,8 +615,10 @@ function QuoteDetail() {
       iframe.contentDocument?.close();
       setIsRequestLoading(false);
       iframe.contentWindow?.print();
-    } catch (err: any) {
-      snackbar.error(err);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        snackbar.error(error.message);
+      }
     }
   };
 
@@ -547,10 +681,10 @@ function QuoteDetail() {
 
   const quoteGotoCheckout = async () => {
     try {
+      if (hasQuoteValidationErrors()) return;
       setQuoteCheckoutLoading(true);
       await handleQuoteCheckout({
         quoteId: id,
-        proceedingCheckoutFn,
         role,
         location,
         navigate,
@@ -567,17 +701,14 @@ function QuoteDetail() {
   }, [id, isHideQuoteCheckout]);
 
   const isAutoEnableQuoteCheckout = useMemo(() => {
-    const isAutoEnable =
-      quoteConfig.find((item) => item.key === 'quote_auto_quoting')?.value === '1';
-
-    if (!isAutoEnable && !isHandleApprove) return false;
+    if (!isAutoQuotingEnabled && !quoteReviewedBySalesRep) return false;
 
     return true;
-  }, [quoteConfig, isHandleApprove]);
+  }, [quoteReviewedBySalesRep, isAutoQuotingEnabled]);
 
-  const isEnableProductShowCheckout = () => {
+  const isEnableProductShowCheckoutFrontendFlow = () => {
     if (isEnableProduct) {
-      if (isHandleApprove && isHideQuoteCheckout) return true;
+      if (quoteReviewedBySalesRep && isHideQuoteCheckout) return true;
       if (!isHideQuoteCheckout) return true;
 
       return false;
@@ -585,6 +716,14 @@ function QuoteDetail() {
 
     return true;
   };
+
+  const isEnableProductShowCheckoutBackendFlow = () => {
+    return !quoteHasWarnings || quoteReviewedBySalesRep;
+  };
+
+  const enableProceedToCheckoutButton = isMoveStockAndBackorderValidationToBackend
+    ? isEnableProductShowCheckoutBackendFlow
+    : isEnableProductShowCheckoutFrontendFlow;
 
   const quoteAndExtraFieldsInfo = useMemo(() => {
     const currentExtraFields = quoteDetail?.extraFields?.map(
@@ -608,6 +747,10 @@ function QuoteDetail() {
 
   const { quotePurchasabilityPermission, quoteConvertToOrderPermission } =
     quotePurchasabilityPermissionInfo;
+
+  const shouldHidePrice = isMoveStockAndBackorderValidationToBackend
+    ? shouldHidePrices
+    : isHideQuoteCheckout;
 
   return (
     <B3Spin isSpinning={isRequestLoading || quoteCheckoutLoading}>
@@ -684,7 +827,7 @@ function QuoteDetail() {
               <QuoteDetailTable
                 total={productList.length}
                 currency={quoteDetail.currency}
-                isHandleApprove={isHandleApprove}
+                quoteReviewedBySalesRep={quoteReviewedBySalesRep}
                 getQuoteTableDetails={getQuoteTableDetails}
                 getTaxRate={getTaxRate}
                 displayDiscount={quoteDetail.displayDiscount}
@@ -712,7 +855,7 @@ function QuoteDetail() {
               }}
             >
               <QuoteDetailSummary
-                isHideQuoteCheckout={isHideQuoteCheckout}
+                shouldHidePrice={shouldHidePrice}
                 quoteSummary={quoteSummary}
                 quoteDetailTax={quoteDetailTax}
                 status={quoteDetail.status}
@@ -775,17 +918,26 @@ function QuoteDetail() {
         {quoteConvertToOrderPermission &&
           quotePurchasabilityPermission &&
           Number(quoteDetail.status) !== 4 &&
+          Number(quoteDetail.status) !== 5 &&
           isShowFooter &&
           quoteDetail?.allowCheckout &&
           isAutoEnableQuoteCheckout &&
-          isEnableProductShowCheckout() && (
-            <QuoteDetailFooter
-              quoteId={quoteDetail.id}
-              role={role}
-              isAgenting={isAgenting}
-              status={quoteDetail.status}
-              proceedingCheckoutFn={proceedingCheckoutFn}
-            />
+          enableProceedToCheckoutButton() && (
+            <Footer isAgenting={isAgenting}>
+              <ProceedToCheckoutButton
+                onClick={() => {
+                  if (hasQuoteValidationErrors()) return;
+                  handleQuoteCheckout({
+                    role,
+                    location,
+                    quoteId: quoteDetail.id,
+                    navigate,
+                  });
+                }}
+              >
+                {b3Lang('quoteDetail.footer.proceedToCheckout')}
+              </ProceedToCheckoutButton>
+            </Footer>
           )}
       </Box>
     </B3Spin>

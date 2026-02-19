@@ -7,7 +7,6 @@ interface Option {
 
 interface NetworkValidationError {
   type: 'network';
-  productName: string;
 }
 
 interface ServerValidationError {
@@ -15,19 +14,64 @@ interface ServerValidationError {
   message: string;
 }
 
-export type ValidationError = NetworkValidationError | ServerValidationError;
+type ValidationError = NetworkValidationError | ServerValidationError;
 
-interface ValidationResult {
-  validProducts: CustomFieldItems[];
-  errors: ValidationError[];
+interface ValidatedProductSuccess {
+  status: 'success';
+  product: CustomFieldItems;
+}
+export interface ValidatedProductWarning {
+  status: 'warning';
+  message: string;
+  product: CustomFieldItems;
+}
+export interface ValidatedProductError {
+  status: 'error';
+  error: ValidationError;
+  product: CustomFieldItems;
 }
 
-export const validateProducts = async (products: CustomFieldItems[]): Promise<ValidationResult> => {
-  const validationPromises = products.map(({ node: product }) => {
-    const { productId, quantity, productsSearch } = product;
-    const { variantId, newSelectOptionList } = productsSearch;
+type ValidatedProduct = ValidatedProductSuccess | ValidatedProductWarning | ValidatedProductError;
 
-    const productOptions = newSelectOptionList.map((option: Option) => {
+interface ValidateProductsResult {
+  success: ValidatedProductSuccess[];
+  warning: ValidatedProductWarning[];
+  error: ValidatedProductError[];
+}
+
+const transformProductListToBeCompatibleWithValidateProducts = (products: CustomFieldItems[]) => {
+  return products.map((product) => {
+    if ('node' in product) {
+      return {
+        ...product.node,
+        productsSearch: {
+          ...product.node.productsSearch,
+          selectedOptions: product.node.productsSearch.newSelectOptionList,
+        },
+      };
+    }
+    return {
+      ...product,
+      productsSearch: {
+        ...product.productsSearch,
+        selectedOptions: product.options,
+        variantId: product.variantId,
+      },
+    };
+  });
+};
+
+export const validateProducts = async (
+  products: CustomFieldItems[],
+): Promise<ValidateProductsResult> => {
+  const productsList = transformProductListToBeCompatibleWithValidateProducts(products);
+
+  const validationPromises = productsList.map((product) => {
+    const { productId, quantity, productsSearch } = product;
+
+    const { variantId, selectedOptions } = productsSearch;
+
+    const productOptions = selectedOptions.map((option: Option) => {
       if (typeof option.optionId === 'string' && option.optionId.includes('attribute')) {
         // The passed in optionIds are formatted like "attribute[123]"
         // This extracts the number from the optionId
@@ -53,33 +97,47 @@ export const validateProducts = async (products: CustomFieldItems[]): Promise<Va
 
   const settledResults = await Promise.allSettled(validationPromises);
 
-  const errors: ValidationError[] = [];
-
-  settledResults.forEach((result, index) => {
-    // Network or unexpected error
-    if (result.status === 'rejected') {
-      const { productName } = products[index].node;
-      errors.push({
-        type: 'network',
-        productName: productName || '',
-      });
-      return;
-    }
-
-    const { responseType, message } = result.value;
-
-    if (responseType === 'ERROR') {
-      errors.push({
-        type: 'validation',
-        message,
-      });
-    }
-  });
-
-  const validProducts = products.filter((_, index) => {
+  const validatedProducts = products.map<ValidatedProduct>((product, index) => {
     const res = settledResults[index];
-    return res.status === 'fulfilled' && res.value.responseType !== 'ERROR';
+
+    if (res.status === 'rejected') {
+      return {
+        status: 'error',
+        error: {
+          type: 'network',
+        },
+        product,
+      };
+    }
+
+    switch (res.value.responseType) {
+      case 'ERROR':
+        return {
+          status: 'error',
+          error: {
+            type: 'validation',
+            message: res.value.message,
+          },
+          product,
+        };
+      case 'WARNING':
+        return {
+          status: 'warning',
+          message: res.value.message,
+          product,
+        };
+      case 'SUCCESS':
+      default:
+        return {
+          status: 'success',
+          product,
+        };
+    }
   });
 
-  return { validProducts, errors };
+  return {
+    success: validatedProducts.filter((product) => product.status === 'success'),
+    warning: validatedProducts.filter((product) => product.status === 'warning'),
+    error: validatedProducts.filter((product) => product.status === 'error'),
+  };
 };

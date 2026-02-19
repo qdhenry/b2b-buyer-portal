@@ -10,7 +10,7 @@ import {
   SelectChangeEvent,
 } from '@mui/material';
 
-import useMobile from '@/hooks/useMobile';
+import { useMobile } from '@/hooks/useMobile';
 import { useB3Lang } from '@/lib/lang';
 import { useAppSelector } from '@/store';
 
@@ -18,7 +18,7 @@ interface B2BAutoCompleteCheckboxProps {
   handleChangeCompanyIds: (companyIds: number[]) => void;
 }
 
-function B2BAutoCompleteCheckbox({ handleChangeCompanyIds }: B2BAutoCompleteCheckboxProps) {
+export function B2BAutoCompleteCheckbox({ handleChangeCompanyIds }: B2BAutoCompleteCheckboxProps) {
   const b3Lang = useB3Lang();
   const [isMobile] = useMobile();
   const { id: currentCompanyId, companyName } = useAppSelector(
@@ -202,5 +202,3 @@ function B2BAutoCompleteCheckbox({ handleChangeCompanyIds }: B2BAutoCompleteChec
     </FormControl>
   );
 }
-
-export default B2BAutoCompleteCheckbox;

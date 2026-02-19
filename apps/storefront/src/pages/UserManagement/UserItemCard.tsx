@@ -6,8 +6,8 @@ import CardContent from '@mui/material/CardContent';
 import IconButton from '@mui/material/IconButton';
 import Typography from '@mui/material/Typography';
 
-import { B3Tag } from '@/components';
-import { verifyLevelPermission } from '@/utils';
+import { B3Tag } from '@/components/B3Tag';
+import { verifyLevelPermission } from '@/utils/b3CheckPermissions/check';
 import { b2bPermissionsMap } from '@/utils/b3CheckPermissions/config';
 
 import { getUserRole } from './config';

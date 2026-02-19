@@ -6,17 +6,19 @@ import { Box, Card, CardContent, InputAdornment, TextField, Typography } from '@
 import { TableColumnItem } from '@/components/table/B3Table';
 import { useB3Lang } from '@/lib/lang';
 import { InvoiceList, InvoiceListNode } from '@/types/invoice';
-import { currencyFormat, displayFormat } from '@/utils';
+import { currencyFormat } from '@/utils/b3CurrencyFormat';
+import { displayFormat } from '@/utils/b3DateFormat';
+
+import { getBcOrderIdFromInvoice, getEpicorOrderId } from '../customizations';
 
 import B3Pulldown from './components/B3Pulldown';
 import InvoiceStatus from './components/InvoiceStatus';
 
 interface InvoiceItemCardProps {
-  item: any;
+  item: InvoiceList;
   checkBox?: (disable: boolean) => ReactElement;
   handleSetSelectedInvoiceAccount: (value: string, id: string) => void;
   handleViewInvoice: (id: string, status: string | number, invoiceCompanyId: string) => void;
-  setIsRequestLoading: (bool: boolean) => void;
   setInvoiceId: (id: string) => void;
   handleOpenHistoryModal: (bool: boolean) => void;
   selectedPay: CustomFieldItems | InvoiceListNode[];
@@ -39,7 +41,6 @@ export function InvoiceItemCard(props: InvoiceItemCardProps) {
     checkBox,
     handleSetSelectedInvoiceAccount,
     handleViewInvoice,
-    setIsRequestLoading,
     setInvoiceId,
     handleOpenHistoryModal,
     selectedPay = [],
@@ -64,21 +65,31 @@ export function InvoiceItemCard(props: InvoiceItemCardProps) {
     {
       key: 'orderNumber',
       title: b3Lang('invoice.invoiceItemCardHeader.order'),
-      render: () => (
-        <Box
-          role="button"
-          sx={{
-            color: '#000000',
-            cursor: 'pointer',
-            textDecoration: 'underline',
-          }}
-          onClick={() => {
-            navigate(`/orderDetail/${item.orderNumber}`);
-          }}
-        >
-          {item?.orderNumber || '-'}
-        </Box>
-      ),
+      render: () => {
+        const displayOrderId = getEpicorOrderId(item) || item.orderNumber;
+        return (
+          <Box
+            role="button"
+            sx={{
+              color: '#000000',
+              cursor: 'pointer',
+              textDecoration: 'underline',
+            }}
+            onClick={() => {
+              // Note: invoice.orderNumber is always null; the actual BC order ID is in extraFields.bcOrderId
+              const bcOrderId = getBcOrderIdFromInvoice(item.extraFields);
+              if (!bcOrderId) return;
+              const epicorId = getEpicorOrderId(item);
+              const url = epicorId
+                ? `/orderDetail/${bcOrderId}/${epicorId}`
+                : `/orderDetail/${bcOrderId}`;
+              navigate(url);
+            }}
+          >
+            {displayOrderId || '-'}
+          </Box>
+        );
+      },
     },
     {
       key: 'createdAt',
@@ -246,7 +257,6 @@ export function InvoiceItemCard(props: InvoiceItemCardProps) {
               row={item}
               setInvoiceId={setInvoiceId}
               handleOpenHistoryModal={handleOpenHistoryModal}
-              setIsRequestLoading={setIsRequestLoading}
               isCurrentCompany={isCurrentCompany}
               invoicePay={invoicePay}
             />
@@ -281,7 +291,9 @@ export function InvoiceItemCard(props: InvoiceItemCardProps) {
                 wordBreak: 'break-all',
               }}
             >
-              {list?.render ? list.render() : item[list.key]}
+              {list?.render
+                ? list.render()
+                : (item as unknown as Record<string, unknown>)[list.key as string]}
             </Box>
           </Box>
         ))}

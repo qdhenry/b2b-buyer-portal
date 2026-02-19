@@ -1,25 +1,31 @@
 import { useContext, useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Alert, Box, ImageListItem } from '@mui/material';
+import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom';
+import { Alert, Box, ImageListItem, Link, Typography } from '@mui/material';
 
 import b2bLogo from '@/assets/b2bLogo.png';
-import { B3Card } from '@/components';
+import { B3Card } from '@/components/B3Card';
 import B3Spin from '@/components/spin/B3Spin';
 import { CHECKOUT_URL, PATH_ROUTES } from '@/constants';
-import { dispatchEvent, useMobile } from '@/hooks';
+import { dispatchEvent } from '@/hooks/useB2BCallback';
+import { useMobile } from '@/hooks/useMobile';
 import { useB3Lang } from '@/lib/lang';
 import { CustomStyleContext } from '@/shared/customStyleButton';
 import { defaultCreateAccountPanel } from '@/shared/customStyleButton/context/config';
 import { GlobalContext } from '@/shared/global';
 import { getBCForcePasswordReset } from '@/shared/service/b2b';
 import { b2bLogin, bcLogin, customerLoginAPI } from '@/shared/service/bc';
-import { isLoggedInSelector, useAppDispatch, useAppSelector } from '@/store';
+import { isLoggedInSelector, useAppDispatch, useAppSelector, useAppStore } from '@/store';
 import { setB2BToken } from '@/store/slices/company';
 import { CustomerRole, UserTypes } from '@/types';
 import { LoginFlagType } from '@/types/login';
-import { b2bJumpPath, channelId, loginJump, platform, snackbar, storeHash } from '@/utils';
+import { b2bJumpPath } from '@/utils/b3CheckPermissions/b2bPermissionPath';
 import b2bLogger from '@/utils/b3Logger';
+import { loginJump } from '@/utils/b3Login';
+import { snackbar } from '@/utils/b3Tip';
+import { channelId, platform, storeHash } from '@/utils/basicConfig';
+import { CompanyStatusKey, isCompanyError } from '@/utils/companyUtils';
 import { getAssetUrl } from '@/utils/getAssetUrl';
+import { getGTMUserDetails } from '@/utils/gtmDataLayer';
 import { getCurrentCustomerInfo } from '@/utils/loginInfo';
 
 import { type PageProps } from '../PageProps';
@@ -32,18 +38,28 @@ import LoginPanel from './LoginPanel';
 import { LoginContainer, LoginImage } from './styled';
 import { useLogout } from './useLogout';
 
-const errorMap: Record<string, string> = {
-  'Your business account is pending approval. You will gain access to business account features, products, and pricing after account approval.':
+const COMPANY_STATUS_MAPPINGS: Record<CompanyStatusKey, string> = {
+  pendingApprovalToViewPrices:
     'global.statusNotifications.willGainAccessToBusinessFeatProductsAndPricingAfterApproval',
-  'Your business account is pending approval. Products, pricing, and ordering will be enabled after account approval.':
+  pendingApprovalToOrder:
     'global.statusNotifications.productsPricingAndOrderingWillBeEnabledAfterApproval',
-  'Your business account is pending approval. You will gain access to business account features after account approval.':
+  pendingApprovalToAccessFeatures:
     'global.statusNotifications.willGainAccessToBusinessFeatAfterApproval',
+  accountInactive: 'global.statusNotifications.businessAccountInactive',
 };
+
+const shouldLogout: LoginFlagType[] = [
+  'loggedOutLogin',
+  'pendingApprovalToViewPrices',
+  'pendingApprovalToOrder',
+  'pendingApprovalToAccessFeatures',
+  'accountInactive',
+];
 
 function Login(props: PageProps) {
   const { setOpenPage } = props;
   const storeDispatch = useAppDispatch();
+  const store = useAppStore();
   const logout = useLogout();
 
   const isLoggedIn = useAppSelector(isLoggedInSelector);
@@ -84,7 +100,6 @@ function Login(props: PageProps) {
   const {
     bottomHtmlRegionEnabled,
     bottomHtmlRegionHtml,
-    createAccountPanelHtml,
     topHtmlRegionEnabled,
     topHtmlRegionHtml,
   } = loginPageHtml;
@@ -95,7 +110,8 @@ function Login(props: PageProps) {
     createAccountButtonText: createAccountButtonText || b3Lang('login.button.createAccount'),
     btnColor: primaryButtonColor || '',
     widgetHeadText: topHtmlRegionEnabled ? topHtmlRegionHtml : undefined,
-    widgetBodyText: createAccountPanelHtml || defaultCreateAccountPanel,
+    // Verndale Customization: Always use the updated default content for New Customer section
+    widgetBodyText: defaultCreateAccountPanel,
     widgetFooterText: bottomHtmlRegionEnabled ? bottomHtmlRegionHtml : undefined,
     logo: displayStoreLogo ? logo : undefined,
   };
@@ -110,15 +126,10 @@ function Login(props: PageProps) {
 
         if (isLoginFlagType(loginFlag)) {
           setLoginFlag(loginFlag);
-        }
 
-        if (loginFlag === 'invoiceErrorTip') {
-          const { tip } = loginType[loginFlag];
-          snackbar.error(b3Lang(tip));
-        }
-
-        if (loginFlag === 'loggedOutLogin' && isLoggedIn) {
-          await logout();
+          if (isLoggedIn && shouldLogout.includes(loginFlag)) {
+            await logout({ showLogoutBanner: loginFlag === 'loggedOutLogin' });
+          }
         }
 
         setLoading(false);
@@ -224,6 +235,23 @@ function Login(props: PageProps) {
         } else {
           const info = await getCurrentCustomerInfo(token);
 
+          // Verndale Customization: Push login event to GTM dataLayer
+          // Push login event to GTM dataLayer
+          try {
+            const userDetails = getGTMUserDetails(store);
+
+            // Push login event to dataLayer
+            if (window.dataLayer) {
+              window.dataLayer.push({
+                event: 'login',
+                user_details: userDetails,
+              });
+            }
+          } catch (error) {
+            b2bLogger.error('Failed to push login event to dataLayer:', error);
+          }
+          // End Verndale Customization
+
           if (quoteDetailToCheckoutUrl) {
             navigate(quoteDetailToCheckoutUrl);
             return;
@@ -249,14 +277,11 @@ function Login(props: PageProps) {
           navigate(path);
         }
       } catch (error: unknown) {
-        if (error instanceof Error) {
-          const i18nKey = errorMap[error.message];
-          if (i18nKey) {
-            snackbar.error(b3Lang(i18nKey));
-            await logout(false);
-          } else {
-            snackbar.error(b3Lang('login.loginTipInfo.accountIncorrect'));
-          }
+        if (isCompanyError(error)) {
+          snackbar.error(b3Lang(COMPANY_STATUS_MAPPINGS[error.reason]));
+          await logout({ showLogoutBanner: false });
+        } else if (error instanceof Error) {
+          snackbar.error(b3Lang('login.loginTipInfo.accountIncorrect'));
         }
       } finally {
         setLoading(false);
@@ -320,6 +345,43 @@ function Login(props: PageProps) {
                       />
                     </ImageListItem>
                   </LoginImage>
+                </Box>
+                {/* Password Reset Notice Banner */}
+                <Box
+                  sx={{
+                    padding: isMobile ? '16px' : '0 5%',
+                    marginBottom: '20px',
+                  }}
+                >
+                  <Alert
+                    severity="info"
+                    variant="filled"
+                    sx={{
+                      backgroundColor: '#003863',
+                      color: '#FFFFFF',
+                      '& .MuiAlert-message': { width: '100%' },
+                      '& .MuiAlert-icon': { color: '#FFFFFF' },
+                    }}
+                  >
+                    <Typography component="span" fontWeight="bold">
+                      Heads up!
+                    </Typography>{' '}
+                    We&apos;ve recently launched a new website, so you&apos;ll need to reset your
+                    password before signing in.
+                    <br />
+                    Don&apos;t worry—all of your order history and account information are still
+                    safely stored.
+                    <br />
+                    Simply click{' '}
+                    <Link
+                      component={RouterLink}
+                      to="/forgotPassword"
+                      sx={{ fontWeight: 'bold', color: '#E91E8C' }}
+                    >
+                      Reset Password
+                    </Link>{' '}
+                    to create a new one and regain access.
+                  </Alert>
                 </Box>
                 {loginInfo.widgetHeadText && (
                   <LoginWidget

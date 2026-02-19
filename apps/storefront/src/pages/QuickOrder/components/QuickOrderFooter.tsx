@@ -1,13 +1,14 @@
-import { Dispatch, SetStateAction, useContext, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { ArrowDropDown } from '@mui/icons-material';
 import { Box, Grid, Menu, MenuItem, SxProps, Typography, useMediaQuery } from '@mui/material';
 import uniq from 'lodash-es/uniq';
+import { Dispatch, SetStateAction, useContext, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { v1 as uuid } from 'uuid';
 
 import CustomButton from '@/components/button/CustomButton';
 import { CART_URL, PRODUCT_DEFAULT_IMAGE } from '@/constants';
-import { useFeatureFlags, useMobile } from '@/hooks';
+import { useFeatureFlags } from '@/hooks/useFeatureFlags';
+import { useMobile } from '@/hooks/useMobile';
 import { useB3Lang } from '@/lib/lang';
 import { GlobalContext } from '@/shared/global';
 import {
@@ -15,10 +16,16 @@ import {
   addProductToShoppingList,
   searchProducts,
 } from '@/shared/service/b2b';
-import { activeCurrencyInfoSelector, rolePermissionSelector, useAppSelector } from '@/store';
+import {
+  activeCurrencyInfoSelector,
+  rolePermissionSelector,
+  useAppSelector,
+  useAppStore,
+} from '@/store';
 import { Product } from '@/types';
-import { currencyFormat, getProductPriceIncTaxOrExTaxBySetting, snackbar } from '@/utils';
+import { currencyFormat } from '@/utils/b3CurrencyFormat';
 import b2bLogger from '@/utils/b3Logger';
+import { getProductPriceIncTaxOrExTaxBySetting } from '@/utils/b3Price';
 import {
   addQuoteDraftProducts,
   calculateProductListPrice,
@@ -26,10 +33,12 @@ import {
   validProductQty,
 } from '@/utils/b3Product/b3Product';
 import { conversionProductsList } from '@/utils/b3Product/shared/config';
+import { snackbar } from '@/utils/b3Tip';
 import b3TriggerCartNumber from '@/utils/b3TriggerCartNumber';
 import { createOrUpdateExistingCart } from '@/utils/cartUtils';
 import { validateProducts } from '@/utils/validateProducts';
 
+import { trackEcommerceEvent } from '@/utils/gtmDataLayer';
 import CreateShoppingList from '../../OrderDetail/components/CreateShoppingList';
 import OrderShoppingList from '../../OrderDetail/components/OrderShoppingList';
 import { addCartProductToVerify, CheckedProduct } from '../utils';
@@ -68,12 +77,25 @@ const transformToCartLineItems = (productsSearch: Product[], checkedArr: Checked
             optionValue: option.value,
           }));
 
+          // Verndale Customization: Add variant price to line item
+          const variantPrice =
+            currentProduct.variants?.length > 0 &&
+            currentProduct.variants.find(
+              (variant: CustomFieldItems) =>
+                variant.sku === currentInventoryInfo.sku &&
+                variant.variant_id === currentInventoryInfo.variant_id,
+            )?.calculated_price;
+          // End Verndale Customization
+
           lineItems.push({
             optionSelections: options,
             allOptions: optionList,
             productId: parseInt(currentInventoryInfo.product_id, 10) || 0,
             quantity,
             variantId: parseInt(currentInventoryInfo.variant_id, 10) || 0,
+            // Verndale Customization: Add product name to line item and price to line item
+            productName: currentProduct.name,
+            basePrice: variantPrice ? Number(variantPrice) : 0,
           });
         }
       }
@@ -111,6 +133,7 @@ function QuickOrderFooter(props: QuickOrderFooterProps) {
   const customerGroupId = useAppSelector((state) => state.company.customer.customerGroupId);
 
   const navigate = useNavigate();
+  const store = useAppStore();
 
   const containerStyle = isMobile
     ? {
@@ -168,6 +191,16 @@ function QuickOrderFooter(props: QuickOrderFooterProps) {
 
       if (res && !res.errors) {
         showAddToCartSuccessMessage();
+
+        // Verndale Customization: Pass store instance to trackEcommerceEvent
+        await trackEcommerceEvent(
+          'add_to_cart',
+          lineItems.map((item) => ({ node: { ...item, productId: item.productId.toString() } })),
+          'Quick Order',
+          '',
+          store,
+        );
+        // End Verndale Customization
       } else if (res && res.errors) {
         snackbar.error(res.errors[0].message);
       } else {
@@ -184,6 +217,16 @@ function QuickOrderFooter(props: QuickOrderFooterProps) {
       const lineItems = await getProductsSearchInfo();
       await createOrUpdateExistingCart(lineItems);
       showAddToCartSuccessMessage();
+
+      // Verndale Customization: Pass store instance to trackEcommerceEvent
+      await trackEcommerceEvent(
+        'add_to_cart',
+        lineItems.map((item) => ({ node: { ...item, productId: item.productId.toString() } })),
+        'Quick Order',
+        '',
+        store,
+      );
+      // End Verndale Customization
     } catch (e) {
       if (e instanceof Error) {
         snackbar.error(e.message);
@@ -226,19 +269,21 @@ function QuickOrderFooter(props: QuickOrderFooterProps) {
 
   const addToQuote = async (products: CustomFieldItems[]) => {
     if (featureFlags['B2B-3318.move_stock_and_backorder_validation_to_backend']) {
-      const { validProducts, errors } = await validateProducts(products);
+      const { success, warning, error } = await validateProducts(products);
 
-      errors.forEach((error) => {
-        if (error.type === 'network') {
+      error.forEach((err) => {
+        if (err.error.type === 'network') {
           snackbar.error(
             b3Lang('quotes.productValidationFailed', {
-              productName: error.productName,
+              productName: err.product.node?.productName || '',
             }),
           );
         } else {
-          snackbar.error(error.message);
+          snackbar.error(err.error.message);
         }
       });
+
+      const validProducts = [...success, ...warning].map((product) => product.product);
 
       addQuoteDraftProducts(validProducts);
 
@@ -431,10 +476,28 @@ function QuickOrderFooter(props: QuickOrderFooterProps) {
       });
 
       const items: CustomFieldItems = [];
+      let dataLayerItems: {
+        productId: number;
+        variantId: number;
+        quantity: number;
+        optionList: CustomFieldItems;
+        productName: string;
+        basePrice: number;
+      }[] = [];
 
       checkedArr.forEach((product: CheckedProduct) => {
         const {
-          node: { optionList, productId, quantity, variantId, productsSearch },
+          node: {
+            optionList,
+            productId,
+            quantity,
+            variantId,
+            productsSearch,
+            // Verndale Customization: Add product name and base price to line item
+            productName,
+            basePrice,
+            // End Verndale Customization
+          },
         } = product;
 
         const optionsList = getOptionsList(optionList);
@@ -445,6 +508,15 @@ function QuickOrderFooter(props: QuickOrderFooterProps) {
           variantId: Number(variantId),
           quantity: Number(quantity),
           optionList: newOptionLists,
+        });
+
+        dataLayerItems.push({
+          productId: Number(productId),
+          variantId: Number(variantId),
+          quantity: Number(quantity),
+          optionList: newOptionLists,
+          productName,
+          basePrice: basePrice ? Number(basePrice) : 0,
         });
       });
 
@@ -461,6 +533,23 @@ function QuickOrderFooter(props: QuickOrderFooterProps) {
         },
       });
       handleShoppingClose(true);
+
+      // Verndale Customization: Track add to shopping list event in GTM
+      await trackEcommerceEvent(
+        'add_to_shopping_list',
+        dataLayerItems.map((item) => ({
+          node: {
+            ...item,
+            productId: item.productId.toString(),
+            optionList: item.optionList
+              .map((option: CustomFieldItems) => option.optionValue)
+              .join(','),
+          },
+        })),
+        `Shopping List - ${shoppingListId}`,
+        String(shoppingListId),
+      );
+      // End Verndale Customization
     } catch (err) {
       b2bLogger.error(err);
     } finally {

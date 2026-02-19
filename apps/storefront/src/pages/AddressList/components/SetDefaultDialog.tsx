@@ -2,10 +2,10 @@ import { ChangeEvent, Dispatch, SetStateAction, useEffect, useState } from 'reac
 import { Box, Checkbox, FormControlLabel, FormGroup } from '@mui/material';
 
 import B3Dialog from '@/components/B3Dialog';
-import { useMobile } from '@/hooks';
+import { useMobile } from '@/hooks/useMobile';
 import { useB3Lang } from '@/lib/lang';
 import { updateB2BAddress } from '@/shared/service/b2b';
-import { snackbar } from '@/utils';
+import { snackbar } from '@/utils/b3Tip';
 
 import { AddressItemType } from '../../../types/address';
 

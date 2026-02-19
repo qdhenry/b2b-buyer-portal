@@ -20,13 +20,13 @@ import {
 import IconButton from '@mui/material/IconButton';
 import TableSortLabel from '@mui/material/TableSortLabel';
 
-import { useMobile } from '@/hooks';
+import { useMobile } from '@/hooks/useMobile';
 import { useB3Lang } from '@/lib/lang';
 import { CustomStyleContext } from '@/shared/customStyleButton';
 
 import { b3HexToRgb, getContrastColor } from '../outSideComponents/utils/b3CustomStyles';
 
-import B3NoData from './B3NoData';
+import { B3NoData } from './B3NoData';
 
 interface NodeWrapper<T extends object> {
   node: T;

@@ -3,12 +3,12 @@ import styled from '@emotion/styled';
 import { Alert, Box } from '@mui/material';
 
 import { StatusNotifications } from '@/constants';
-import { useBlockPendingAccountViewPrice } from '@/hooks';
+import { useBlockPendingAccountViewPrice } from '@/hooks/useBlockPendingAccountViewPrice';
 import { useB3Lang } from '@/lib/lang';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { setLoginType } from '@/store/slices/company';
 import { LoginTypes } from '@/types';
-import { B3SStorage } from '@/utils';
+import { B3SStorage } from '@/utils/b3Storage';
 
 type AlertColor = 'success' | 'info' | 'warning' | 'error';
 

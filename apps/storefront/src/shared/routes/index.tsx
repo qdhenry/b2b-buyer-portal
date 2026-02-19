@@ -4,7 +4,7 @@ import { matchPath } from 'react-router-dom';
 import { PageProps } from '@/pages/PageProps';
 import { store } from '@/store';
 import { CompanyStatus, CustomerRole, UserTypes } from '@/types';
-import { b2bJumpPath } from '@/utils';
+import { b2bJumpPath } from '@/utils/b3CheckPermissions/b2bPermissionPath';
 import b2bLogger from '@/utils/b3Logger';
 import { isB2bTokenPage, logoutSession } from '@/utils/b3logout';
 
@@ -13,8 +13,8 @@ import { GlobalState } from '../global/context/config';
 import {
   BuyerPortalRoute,
   getAllowedRoutesWithoutComponent,
-  RouteFirstLevelItem,
   RouteItem,
+  RouteItemBasic,
   routeList,
 } from '../routeList';
 
@@ -51,7 +51,7 @@ const routesMap: Record<string, LazyExoticComponent<(props: PageProps) => ReactE
   '/quotes': QuotesList,
   '/shoppingLists': ShoppingLists,
   '/purchased-products': QuickOrder,
-  '/orderDetail/:id': OrderDetail,
+  '/orderDetail/:bcOrderId/:epicorOrderId?': OrderDetail,
   '/addresses': AddressList,
   '/shoppingList/:id': ShoppingListDetails,
   '/user-management': UserManagement,
@@ -72,55 +72,48 @@ function addComponentToRoutes(routes: BuyerPortalRoute[]): RouteItem[] {
 
 const routes: RouteItem[] = addComponentToRoutes(routeList);
 
-const firstLevelRouting: RouteFirstLevelItem[] = [
+const firstLevelRouting: RouteItemBasic[] = [
   {
     path: '/',
     name: '',
     component: HomePage,
     permissions: allLegacyPermission,
-    isProvider: false,
   },
   {
     path: '/register',
     name: 'register',
     component: Registered,
     permissions: allLegacyPermission,
-    isProvider: true,
   },
   {
     path: '/login',
     name: 'Login',
     component: Login,
     permissions: allLegacyPermission,
-    isProvider: false,
   },
   {
     path: '/pdp',
     name: 'pdp',
     component: PDP,
     permissions: allLegacyPermission,
-    isProvider: false,
   },
   {
     path: '/forgotPassword',
     name: 'forgotPassword',
     component: ForgotPassword,
     permissions: allLegacyPermission,
-    isProvider: false,
   },
   {
     path: '/registeredbctob2b',
     name: 'registeredbctob2b',
     component: RegisteredBCToB2B,
     permissions: allLegacyPermission,
-    isProvider: true,
   },
   {
     path: '/payment/:id',
     name: 'payment',
     component: InvoicePayment,
     permissions: allLegacyPermission,
-    isProvider: false,
   },
 ];
 
@@ -195,7 +188,7 @@ const gotoAllowedAppPage = async (
     return false;
   });
 
-  const isFirstLevelFlag = firstLevelRouting.some((item: RouteFirstLevelItem) => {
+  const isFirstLevelFlag = firstLevelRouting.some((item: RouteItemBasic) => {
     if (url.includes('/login?') || url.includes('payment')) {
       return true;
     }

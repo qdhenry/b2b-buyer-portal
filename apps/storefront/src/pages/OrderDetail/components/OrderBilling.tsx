@@ -1,8 +1,8 @@
 import { useContext, useEffect, useState } from 'react';
 import { Box, Card, CardContent, Stack, Typography } from '@mui/material';
 
-import { B3ProductList } from '@/components';
-import { useMobile } from '@/hooks';
+import { B3ProductList } from '@/components/B3ProductList';
+import { useMobile } from '@/hooks/useMobile';
 import { useB3Lang } from '@/lib/lang';
 
 import { Address, OrderProductItem } from '../../../types';
@@ -15,7 +15,7 @@ type OrderBillingProps = {
   isCurrentCompany: boolean;
 };
 
-export default function OrderBilling({ isCurrentCompany }: OrderBillingProps) {
+export function OrderBilling({ isCurrentCompany }: OrderBillingProps) {
   const {
     state: { billingAddress, digitalProducts = [], addressLabelPermission, orderId, money },
   } = useContext(OrderDetailsContext);

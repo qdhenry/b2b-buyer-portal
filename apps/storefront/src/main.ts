@@ -1,5 +1,17 @@
 import { bindLinks, initApp, requestIdleCallbackFunction, unbindLinks } from './load-functions';
 
+// Declare GTM dataLayer for TypeScript
+declare global {
+  interface Window {
+    dataLayer: Array<Record<string, any>>;
+  }
+}
+
+// Verndale Customization: GTM dataLayer initialization
+// Initialize dataLayer if it doesn't exist
+window.dataLayer = window.dataLayer || [];
+// End Verndale Customization
+
 export enum Environment {
   Production = 'production',
   Staging = 'staging',

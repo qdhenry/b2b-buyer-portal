@@ -1,12 +1,16 @@
 import styled from '@emotion/styled';
-import { useTheme } from '@mui/material';
+import { Skeleton, useTheme } from '@mui/material';
 import Box from '@mui/material/Box';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
 import Typography from '@mui/material/Typography';
 
+import { B3Tag } from '@/components/B3Tag';
 import { isB2BUserSelector, useAppSelector } from '@/store';
-import { currencyFormat, displayFormat } from '@/utils';
+import { currencyFormat } from '@/utils/b3CurrencyFormat';
+import { displayFormat } from '@/utils/b3DateFormat';
+
+import { getEpicorOrderId } from '../customizations';
 
 import OrderStatus from './components/OrderStatus';
 
@@ -18,11 +22,13 @@ interface ListItem {
   status: string;
   totalIncTax: string;
   createdAt: string;
+  extraInfo?: string;
 }
 
 interface OrderItemCardProps {
   goToDetail: () => void;
   item: ListItem;
+  isLoading?: boolean;
 }
 
 const Flex = styled('div')(() => ({
@@ -33,7 +39,7 @@ const Flex = styled('div')(() => ({
   },
 }));
 
-export function OrderItemCard({ item, goToDetail }: OrderItemCardProps) {
+export function OrderItemCard({ item, goToDetail, isLoading = false }: OrderItemCardProps) {
   const theme = useTheme();
   const isB2BUser = useAppSelector(isB2BUserSelector);
   const customer = useAppSelector(({ company }) => company.customer);
@@ -44,6 +50,9 @@ export function OrderItemCard({ item, goToDetail }: OrderItemCardProps) {
     }
     return `by ${customer.firstName} ${customer.lastName}`;
   };
+
+  // Show skeleton while loading, then Epicor ID when available, or --na-- if not found
+  const epicorId = getEpicorOrderId(item);
 
   return (
     <Card key={item.orderId}>
@@ -61,7 +70,15 @@ export function OrderItemCard({ item, goToDetail }: OrderItemCardProps) {
                 color: 'rgba(0, 0, 0, 0.87)',
               }}
             >
-              {`# ${item.orderId}`}
+              {isLoading ? (
+                <Skeleton variant="text" width={100} height={32} />
+              ) : epicorId ? (
+                `# ${epicorId}`
+              ) : (
+                <B3Tag color="#9e9e9e" textColor="#fff" fontSize="10px" padding="2px 8px">
+                  <i>In processing</i>
+                </B3Tag>
+              )}
             </Typography>
             <Typography
               sx={{

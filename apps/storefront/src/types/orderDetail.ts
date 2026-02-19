@@ -1,4 +1,5 @@
 import { Address } from './global';
+// eslint-disable-next-line import/no-cycle
 import { CompanyInfoTypes } from './invoice';
 
 export interface OrderProductOption {

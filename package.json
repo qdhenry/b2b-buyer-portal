@@ -14,7 +14,9 @@
     "format": "turbo run format --parallel --continue",
     "test": "turbo run test",
     "clean": "yarn run clean:node-modules",
-    "clean:node-modules": "find . -name 'node_modules' -type d -prune -exec rm -rf '{}' +"
+    "clean:node-modules": "find . -name 'node_modules' -type d -prune -exec rm -rf '{}' +",
+    "deploy": "cd apps/storefront && vercel deploy",
+    "deploy:prod": "cd apps/storefront && vercel deploy --prod"
   },
   "devDependencies": {
     "eslint": "^8.2.0",

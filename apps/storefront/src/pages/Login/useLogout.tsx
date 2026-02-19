@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 
-import { dispatchEvent } from '@/hooks';
+import { dispatchEvent } from '@/hooks/useB2BCallback';
 import { endUserMasqueradingCompany, superAdminEndMasquerade } from '@/shared/service/b2b';
 import { bcLogoutLogin } from '@/shared/service/bc';
 import { clearMasqueradeCompany, useAppDispatch, useAppSelector } from '@/store';
@@ -34,28 +34,37 @@ const useEndCompanyMasquerading = () => {
   }, [selectCompanyHierarchyId]);
 };
 
+interface LogoutOptions {
+  showLogoutBanner?: boolean;
+}
+
 export const useLogout = () => {
   const endMasquerade = useEndMasquerade();
   const endCompanyMasquerading = useEndCompanyMasquerading();
 
-  return async (showLogoutBanner: boolean = true) => {
-    try {
-      const { result } = (await bcLogoutLogin()).data.logout;
+  const logout = useCallback(
+    async ({ showLogoutBanner = true }: LogoutOptions) => {
+      try {
+        const { result } = (await bcLogoutLogin()).data.logout;
 
-      if (result !== 'success') {
-        return;
-      }
+        if (result !== 'success') {
+          return;
+        }
 
-      await Promise.all([endCompanyMasquerading(), endMasquerade()]);
-    } catch (e) {
-      b2bLogger.error(e);
-    } finally {
-      // SUP-1282 Clear sessionStorage to allow visitors to display the checkout page
-      window.sessionStorage.clear();
-      logoutSession();
-      if (showLogoutBanner) {
-        dispatchEvent('on-logout');
+        await Promise.all([endCompanyMasquerading(), endMasquerade()]);
+      } catch (e) {
+        b2bLogger.error(e);
+      } finally {
+        // SUP-1282 Clear sessionStorage to allow visitors to display the checkout page
+        window.sessionStorage.clear();
+        logoutSession();
+        if (showLogoutBanner) {
+          dispatchEvent('on-logout');
+        }
       }
-    }
-  };
+    },
+    [endCompanyMasquerading, endMasquerade],
+  );
+
+  return logout;
 };

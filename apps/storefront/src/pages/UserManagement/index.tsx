@@ -4,13 +4,15 @@ import { Box } from '@mui/material';
 import B3Dialog from '@/components/B3Dialog';
 import B3Filter from '@/components/filter/B3Filter';
 import B3Spin from '@/components/spin/B3Spin';
-import { useCardListColumn, useMobile, useTableRef } from '@/hooks';
+import { useCardListColumn } from '@/hooks/useCardListColumn';
+import { useMobile } from '@/hooks/useMobile';
+import { useTableRef } from '@/hooks/useTableRef';
 import { useB3Lang } from '@/lib/lang';
 import { rolePermissionSelector, useAppSelector } from '@/store';
 import { CustomerRole } from '@/types';
-import { snackbar } from '@/utils';
-import { verifyCreatePermission } from '@/utils/b3CheckPermissions';
+import { verifyCreatePermission } from '@/utils/b3CheckPermissions/check';
 import { b2bPermissionsMap } from '@/utils/b3CheckPermissions/config';
+import { snackbar } from '@/utils/b3Tip';
 
 import { B3PaginationTable, GetRequestList } from './table/B3PaginationTable';
 import B3AddEditUser, { HandleOpenAddEditUserClick } from './AddEditUser';

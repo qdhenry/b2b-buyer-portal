@@ -5,7 +5,7 @@ const useMobile = (): [boolean] => {
 
   useEffect(() => {
     const resize = () => {
-      setIsMobile(document.body.clientWidth <= 750);
+      setIsMobile(document.body.clientWidth <= 1024);
     };
 
     resize();
@@ -20,4 +20,4 @@ const useMobile = (): [boolean] => {
   return [isMobile];
 };
 
-export default useMobile;
+export { useMobile };

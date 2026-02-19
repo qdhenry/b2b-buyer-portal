@@ -62,16 +62,16 @@ export interface CustomStyleButtonState extends Record<BtnKeys, Partial<BtnStyle
 
 export const defaultCreateAccountPanel = `<div class="panel">
 <div class="panel-header">
-    <h2 class="panel-title">New Customer?</h2>
+    <h2 class="panel-title">New customer?</h2>
 </div>
 <div class="panel-body">
-    <p class="new-customer-intro">Create an account with us and you'll be able to:</p>
+    <p class="new-customer-intro">Create an online account with us and you'll be able to:</p>
     <ul class="new-customer-fact-list">
-        <li class="new-customer-fact">Check out faster</li>
-        <li class="new-customer-fact">Save multiple shipping addresses</li>
-        <li class="new-customer-fact">Access your order history</li>
-        <li class="new-customer-fact">Track new orders</li>
-        <li class="new-customer-fact">Save items to your Wish List</li>
+        <li class="new-customer-fact"><strong>New!</strong> Create and save new shipping addresses</li>
+        <li class="new-customer-fact"><strong>New!</strong> Create multiple shopping lists for easy reordering</li>
+        <li class="new-customer-fact"><strong>New!</strong> User roles for large labs with multiple sites purchasing, to review before processing</li>
+        <li class="new-customer-fact">Track orders quickly</li>
+        <li class="new-customer-fact">Access your customized pricing</li>
     </ul>
 </div>
 </div>

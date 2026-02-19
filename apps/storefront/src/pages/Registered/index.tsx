@@ -3,26 +3,29 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Box, ImageListItem } from '@mui/material';
 
 import b2bLogo from '@/assets/b2bLogo.png';
-import { B3Card } from '@/components';
+import { B3Card } from '@/components/B3Card';
 import B3Spin from '@/components/spin/B3Spin';
 import { LOGIN_LANDING_LOCATIONS } from '@/constants';
-import { useMobile, useScrollBar } from '@/hooks';
+import { useMobile } from '@/hooks/useMobile';
+import { useScrollBar } from '@/hooks/useScrollBar';
 import { useB3Lang } from '@/lib/lang';
 import { CustomStyleContext } from '@/shared/customStyleButton';
 import { GlobalContext } from '@/shared/global';
 import { getB2BAccountFormFields, getB2BCountries } from '@/shared/service/b2b';
 import { bcLogin } from '@/shared/service/bc';
 import { themeFrameSelector, useAppSelector } from '@/store';
-import { B3SStorage, loginJump, platform } from '@/utils';
 import b2bLogger from '@/utils/b3Logger';
+import { loginJump } from '@/utils/b3Login';
+import { B3SStorage } from '@/utils/b3Storage';
+import { platform } from '@/utils/basicConfig';
 import { getAssetUrl } from '@/utils/getAssetUrl';
 import { getCurrentCustomerInfo } from '@/utils/loginInfo';
-import { getTemPlateConfig } from '@/utils/storefrontConfig';
+import { getStoreConfigs } from '@/utils/storefrontConfig';
 
 import { loginCheckout, LoginConfig } from '../Login/config';
 import { type PageProps } from '../PageProps';
 
-import { RegisteredContext } from './context/RegisteredContext';
+import { RegisteredContext, RegisteredProvider } from './context/RegisteredContext';
 import {
   AccountFormFieldsItems,
   b2bAddressRequiredFields,
@@ -93,7 +96,7 @@ function Registered(props: PageProps) {
         }
 
         // update the storefront config in the context
-        getTemPlateConfig(styleDispatch, globalDispatch);
+        getStoreConfigs(styleDispatch, globalDispatch);
 
         const accountFormAllFields = formType.map((item: number) => getB2BAccountFormFields(item));
 
@@ -338,4 +341,10 @@ function Registered(props: PageProps) {
   );
 }
 
-export default Registered;
+export default function RegisterPage(props: PageProps) {
+  return (
+    <RegisteredProvider>
+      <Registered {...props} />
+    </RegisteredProvider>
+  );
+}

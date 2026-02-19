@@ -7,7 +7,7 @@ import {
 import { Box, Typography } from '@mui/material';
 import IconButton from '@mui/material/IconButton';
 
-import { useMobile } from '@/hooks';
+import { useMobile } from '@/hooks/useMobile';
 import { useB3Lang } from '@/lib/lang';
 import { getB2BAllOrders, getBCAllOrders } from '@/shared/service/b2b';
 import { isB2BUserSelector, useAppSelector } from '@/store';
@@ -43,7 +43,7 @@ const defaultSearchParams = {
   offset: 0,
 };
 
-function DetailPagination({ onChange, color }: DetailPageProps) {
+export function DetailPagination({ onChange, color }: DetailPageProps) {
   const b3Lang = useB3Lang();
   const isB2BUser = useAppSelector(isB2BUserSelector);
   const [listIndex, setListIndex] = useState<number>(initListIndex);
@@ -127,10 +127,10 @@ function DetailPagination({ onChange, color }: DetailPageProps) {
   };
 
   useEffect(() => {
-    if (totalCount > 0) setListIndex(currentIndex);
-    if (listIndex === initListIndex) return;
-    const searchPageStart = currentIndex + (searchParams.offset || 0);
-    setListIndex(searchPageStart);
+    if (totalCount > 0) {
+      const searchPageStart = currentIndex + (searchParams.offset || 0);
+      setListIndex(searchPageStart);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
@@ -212,5 +212,3 @@ function DetailPagination({ onChange, color }: DetailPageProps) {
     </Box>
   );
 }
-
-export default DetailPagination;

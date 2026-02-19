@@ -11,9 +11,10 @@ import {
 import isEmpty from 'lodash-es/isEmpty';
 import isEqual from 'lodash-es/isEqual';
 
-import { useMobile } from '@/hooks';
+import { useMobile } from '@/hooks/useMobile';
 import { useAppSelector } from '@/store';
-import { forwardRefWithGenerics, memoWithGenerics } from '@/utils';
+import { forwardRefWithGenerics } from '@/utils/forwardRefWithGenerics';
+import { memoWithGenerics } from '@/utils/memoWithGenerics';
 
 import {
   B3Table,

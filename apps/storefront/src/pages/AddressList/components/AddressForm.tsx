@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { Checkbox, FormControlLabel, styled } from '@mui/material';
 import cloneDeep from 'lodash-es/cloneDeep';
 
-import { B3CustomForm } from '@/components';
+import { B3CustomForm } from '@/components/B3CustomForm';
 import B3Dialog from '@/components/B3Dialog';
 import { useB3Lang } from '@/lib/lang';
 import {
@@ -13,7 +13,7 @@ import {
   updateBcAddress,
   validateAddressExtraFields,
 } from '@/shared/service/b2b';
-import { snackbar } from '@/utils';
+import { snackbar } from '@/utils/b3Tip';
 
 import { AddressItemType } from '../../../types/address';
 import { deCodeField } from '../../Registered/config';
@@ -119,7 +119,9 @@ function AddressForm(
 
       return true;
     } catch (error: any) {
-      snackbar.error(error);
+      if (error instanceof Error) {
+        snackbar.error(error.message);
+      }
       throw error;
     }
   };
@@ -212,8 +214,10 @@ function AddressForm(
         setOpen(false);
 
         await updateAddressList(true);
-      } catch (err: any) {
-        snackbar.error(err);
+      } catch (error: unknown) {
+        if (error instanceof Error) {
+          snackbar.error(error.message);
+        }
       } finally {
         setAddUpdateLoading(false);
       }
@@ -283,8 +287,10 @@ function AddressForm(
         setOpen(false);
 
         await updateAddressList(true);
-      } catch (err: any) {
-        snackbar.error(err);
+      } catch (error: any) {
+        if (error instanceof Error) {
+          snackbar.error(error.message);
+        }
       } finally {
         setAddUpdateLoading(false);
       }

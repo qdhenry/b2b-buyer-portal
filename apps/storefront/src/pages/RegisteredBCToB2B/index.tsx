@@ -5,17 +5,19 @@ import styled from '@emotion/styled';
 import { Alert, Box, ImageListItem } from '@mui/material';
 import isEmpty from 'lodash-es/isEmpty';
 
-import { B3Card, B3CustomForm } from '@/components';
+import { B3Card } from '@/components/B3Card';
+import { B3CustomForm } from '@/components/B3CustomForm';
 import CustomButton from '@/components/button/CustomButton';
 import { getContrastColor } from '@/components/outSideComponents/utils/b3CustomStyles';
 import B3Spin from '@/components/spin/B3Spin';
-import { useMobile } from '@/hooks';
+import { useMobile } from '@/hooks/useMobile';
 import { useB3Lang } from '@/lib/lang';
 import { CustomStyleContext } from '@/shared/customStyleButton';
 import { GlobalContext } from '@/shared/global';
 import { useAppSelector } from '@/store';
-import { channelId, loginJump, storeHash } from '@/utils';
 import b2bLogger from '@/utils/b3Logger';
+import { loginJump } from '@/utils/b3Login';
+import { channelId, storeHash } from '@/utils/basicConfig';
 import { getCurrentCustomerInfo } from '@/utils/loginInfo';
 
 import {
@@ -38,7 +40,7 @@ import {
   State,
   toHump,
 } from '../Registered/config';
-import { RegisteredContext } from '../Registered/context/RegisteredContext';
+import { RegisteredContext, RegisteredProvider } from '../Registered/context/RegisteredContext';
 import RegisteredFinish from '../Registered/RegisteredFinish';
 import {
   InformationFourLabels,
@@ -67,7 +69,7 @@ const StyledRegisterContent = styled(Box)({
   },
 });
 
-export default function RegisteredBCToB2B(props: PageProps) {
+function RegisteredBCToB2B(props: PageProps) {
   const [errorMessage, setErrorMessage] = useState('');
   const [showFinishPage, setShowFinishPage] = useState<boolean>(false);
 
@@ -745,5 +747,13 @@ export default function RegisteredBCToB2B(props: PageProps) {
         </B3Spin>
       </RegisteredContainer>
     </B3Card>
+  );
+}
+
+export default function RegisteredBCToB2BPage(props: PageProps) {
+  return (
+    <RegisteredProvider>
+      <RegisteredBCToB2B {...props} />
+    </RegisteredProvider>
   );
 }

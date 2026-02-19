@@ -5,14 +5,17 @@ import { IconButton, Menu, MenuItem } from '@mui/material';
 import { styled } from '@mui/material/styles';
 
 import { useB3Lang } from '@/lib/lang';
-import { rolePermissionSelector, useAppSelector } from '@/store';
+// HIDDEN: Pay option temporarily disabled. Uncomment when restoring Pay functionality.
+// import { rolePermissionSelector, useAppSelector } from '@/store';
 import { InvoiceList } from '@/types/invoice';
-import { b2bPermissionsMap, snackbar, verifyLevelPermission } from '@/utils';
+import { verifyLevelPermission } from '@/utils/b3CheckPermissions/check';
+import { b2bPermissionsMap } from '@/utils/b3CheckPermissions/config';
+import { snackbar } from '@/utils/b3Tip';
 
-import { gotoInvoiceCheckoutUrl } from '../utils/payment';
-import { getInvoiceDownloadPDFUrl, handlePrintPDF } from '../utils/pdf';
-
-import { triggerPdfDownload } from './triggerPdfDownload';
+import { getBcOrderIdFromInvoice, getEpicorOrderId } from '../../customizations';
+// HIDDEN: Pay option temporarily disabled. Uncomment when restoring Pay functionality.
+// import { gotoInvoiceCheckoutUrl } from '../utils/payment';
+import { downloadInvoicePdf, getInvoicePdfUrl } from '../utils/pdf';
 
 const StyledMenu = styled(Menu)(() => ({
   '& .MuiPaper-elevation': {
@@ -24,7 +27,6 @@ const StyledMenu = styled(Menu)(() => ({
 
 interface B3PulldownProps {
   row: InvoiceList;
-  setIsRequestLoading: (bool: boolean) => void;
   setInvoiceId: (id: string) => void;
   handleOpenHistoryModal: (bool: boolean) => void;
   isCurrentCompany: boolean;
@@ -33,22 +35,28 @@ interface B3PulldownProps {
 
 function B3Pulldown({
   row,
-  setIsRequestLoading,
+
   setInvoiceId,
   handleOpenHistoryModal,
-  isCurrentCompany,
-  invoicePay,
+  // HIDDEN: Pay option temporarily disabled. Rename back to isCurrentCompany and invoicePay when restoring.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  isCurrentCompany: _isCurrentCompany,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  invoicePay: _invoicePay,
 }: B3PulldownProps) {
-  const platform = useAppSelector(({ global }) => global.storeInfo.platform);
+  // HIDDEN: Pay option temporarily disabled. Uncomment when restoring Pay functionality.
+  // const platform = useAppSelector(({ global }) => global.storeInfo.platform);
   const ref = useRef<HTMLButtonElement | null>(null);
   const [isOpen, setIsOpen] = useState(false);
-  const [isPay, setIsPay] = useState<boolean>(true);
+  // HIDDEN: Pay option temporarily disabled. Uncomment when restoring Pay functionality.
+  // const [isPay, setIsPay] = useState<boolean>(true);
 
   const navigate = useNavigate();
 
   const b3Lang = useB3Lang();
 
-  const { invoicePayPermission, purchasabilityPermission } = useAppSelector(rolePermissionSelector);
+  // HIDDEN: Pay option temporarily disabled. Uncomment when restoring Pay functionality.
+  // const { invoicePayPermission, purchasabilityPermission } = useAppSelector(rolePermissionSelector);
   const { getOrderPermission: getOrderPermissionCode } = b2bPermissionsMap;
 
   const [isCanViewOrder, setIsCanViewOrder] = useState<boolean>(false);
@@ -63,59 +71,59 @@ function B3Pulldown({
     setIsOpen(true);
   };
 
-  const handleViewInvoice = async (isPayNow: boolean) => {
-    const { id } = row;
-
+  const handleViewInvoice = async () => {
     close();
 
-    setIsRequestLoading(true);
+    try {
+      const pdfUrl = await getInvoicePdfUrl(row);
+      if (!pdfUrl) {
+        snackbar.error('pdf url resolution error');
+        return;
+      }
 
-    const pdfUrl = await handlePrintPDF(id, isPayNow);
-
-    setIsRequestLoading(false);
-
-    if (!pdfUrl) {
-      snackbar.error('pdf url resolution error');
-      return;
+      window.open(pdfUrl, '_blank', 'fullscreen=yes');
+    } catch (e) {
+      snackbar.error('Error generating PDF');
     }
-
-    const { href } = window.location;
-    if (!href.includes('invoice')) {
-      return;
-    }
-
-    window.open(pdfUrl, '_blank', 'fullscreen=yes');
   };
 
   const handleViewOrder = () => {
-    const { orderNumber } = row;
     close();
-    navigate(`/orderDetail/${orderNumber}`);
-  };
-
-  const handlePay = async () => {
-    close();
-
-    const { openBalance, originalBalance, id } = row;
-
-    const params = {
-      lineItems: [
-        {
-          invoiceId: Number(id),
-          amount: openBalance.value === '.' ? '0' : `${Number(openBalance.value)}`,
-        },
-      ],
-      currency: openBalance?.code || originalBalance.code,
-    };
-
-    if (openBalance.value === '.' || Number(openBalance.value) === 0) {
-      snackbar.error('The payment amount entered has an invalid value.');
-
+    // Note: invoice.orderNumber is always null; the actual BC order ID is in extraFields.bcOrderId
+    const bcOrderId = getBcOrderIdFromInvoice(row.extraFields);
+    if (!bcOrderId) {
+      snackbar.error('Order ID not available');
       return;
     }
-
-    await gotoInvoiceCheckoutUrl(params, platform, false);
+    const epicorId = getEpicorOrderId(row);
+    const url = epicorId ? `/orderDetail/${bcOrderId}/${epicorId}` : `/orderDetail/${bcOrderId}`;
+    navigate(url);
   };
+
+  // HIDDEN: Pay option temporarily disabled. Uncomment when restoring Pay functionality.
+  // const handlePay = async () => {
+  //   close();
+  //
+  //   const { openBalance, originalBalance, id } = row;
+  //
+  //   const params = {
+  //     lineItems: [
+  //       {
+  //         invoiceId: Number(id),
+  //         amount: openBalance.value === '.' ? '0' : `${Number(openBalance.value)}`,
+  //       },
+  //     ],
+  //     currency: openBalance?.code || originalBalance.code,
+  //   };
+  //
+  //   if (openBalance.value === '.' || Number(openBalance.value) === 0) {
+  //     snackbar.error('The payment amount entered has an invalid value.');
+  //
+  //     return;
+  //   }
+  //
+  //   await gotoInvoiceCheckoutUrl(params, platform, false);
+  // };
 
   const viewPaymentHistory = async () => {
     close();
@@ -123,24 +131,22 @@ function B3Pulldown({
   };
 
   const handleDownloadPDF = async () => {
-    const { id } = row;
-
     close();
-    setIsRequestLoading(true);
-    const url = await getInvoiceDownloadPDFUrl(id);
-
-    setIsRequestLoading(false);
-
-    triggerPdfDownload(url, 'file.pdf');
+    try {
+      await downloadInvoicePdf(row);
+    } catch (e) {
+      snackbar.error('Error downloading PDF');
+    }
   };
 
   useEffect(() => {
-    const { openBalance, orderUserId, companyInfo } = row;
-    const payPermissions =
-      Number(openBalance.value) > 0 && invoicePayPermission && purchasabilityPermission;
-
-    const isPayInvoice = isCurrentCompany ? payPermissions : payPermissions && invoicePay;
-    setIsPay(isPayInvoice);
+    const { orderUserId, companyInfo } = row;
+    // HIDDEN: Pay option temporarily disabled. Uncomment when restoring Pay functionality.
+    // const { openBalance } = row;
+    // const payPermissions =
+    //   Number(openBalance.value) > 0 && invoicePayPermission && purchasabilityPermission;
+    // const isPayInvoice = isCurrentCompany ? payPermissions : payPermissions && invoicePay;
+    // setIsPay(isPayInvoice);
 
     const viewOrderPermission = verifyLevelPermission({
       code: getOrderPermissionCode,
@@ -180,17 +186,6 @@ function B3Pulldown({
           horizontal: 'right',
         }}
       >
-        <MenuItem
-          key="View-invoice"
-          sx={{
-            color: 'primary.main',
-          }}
-          onClick={() =>
-            handleViewInvoice(row.status !== 2 && invoicePayPermission && purchasabilityPermission)
-          }
-        >
-          {b3Lang('invoice.actions.viewInvoice')}
-        </MenuItem>
         {isCanViewOrder && (
           <MenuItem
             key="View-Order"
@@ -214,6 +209,7 @@ function B3Pulldown({
             {b3Lang('invoice.actions.viewPaymentHistory')}
           </MenuItem>
         )}
+        {/* HIDDEN: Pay option temporarily disabled. To restore, uncomment the block below.
         {isPay && (
           <MenuItem
             key="Pay"
@@ -225,14 +221,13 @@ function B3Pulldown({
             {b3Lang('invoice.actions.pay')}
           </MenuItem>
         )}
+        */}
         <MenuItem
           key="Print"
           sx={{
             color: 'primary.main',
           }}
-          onClick={() =>
-            handleViewInvoice(row.status !== 2 && invoicePayPermission && purchasabilityPermission)
-          }
+          onClick={() => handleViewInvoice()}
         >
           {b3Lang('invoice.actions.print')}
         </MenuItem>

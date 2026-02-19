@@ -1,5 +1,6 @@
 import { QuoteExtraFieldsType } from '@/types/quotes';
-import { channelId, convertArrayToGraphql, convertObjectToGraphql, storeHash } from '@/utils';
+import { channelId, storeHash } from '@/utils/basicConfig';
+import { convertArrayToGraphql, convertObjectToGraphql } from '@/utils/graphqlDataConvert';
 
 import B3Request from '../../request/b3Fetch';
 
@@ -40,6 +41,7 @@ const getQuotesList = (data: CustomFieldItems, type: string) => `
           subtotal,
           totalAmount,
           taxTotal,
+          uuid,
         }
       }
     }
@@ -139,6 +141,7 @@ const quoteCreate = (data: CustomFieldItems) => `mutation CreateQuote{
     quote{
       id,
       createdAt,
+      uuid,
     }
   }
 }`;
@@ -154,12 +157,13 @@ const quoteUpdate = (data: CustomFieldItems) => `mutation{
   }
 }`;
 
-const getQuoteInfo = (data: { id: number; date: string }) => `
+const getQuoteInfo = (data: { id: number; date: string; uuid?: string }) => `
   query GetQuoteInfoB2B {
     quote(
       id: ${data.id},
       storeHash: "${storeHash}",
       date:  "${data?.date || ''}",
+      ${data.uuid ? `uuid: "${data.uuid}",` : ''}
     ) {
       id,
       createdAt,
@@ -284,6 +288,7 @@ const getQuoteInfo = (data: { id: number; date: string }) => `
       channelName,
       allowCheckout,
       displayDiscount,
+      uuid,
     }
   }
 `;
@@ -306,7 +311,7 @@ const getExportQuotePdfQuery = (data: {
   }
 }`;
 
-const getQuoteCheckoutQuery = (data: { id: number }) => `mutation{
+const getQuoteCheckoutQuery = (data: { id: number }) => `mutation CheckoutQuote {
   quoteCheckout(
     id: ${data.id},
     storeHash: "${storeHash}",
@@ -415,6 +420,7 @@ export interface QuoteEdge {
     subtotal: string;
     totalAmount: string;
     taxTotal: string;
+    uuid?: string;
   };
 }
 
@@ -612,16 +618,17 @@ export interface B2BQuoteDetail {
       channelName: string;
       allowCheckout: boolean;
       displayDiscount: boolean;
+      uuid?: string;
     };
   };
 }
 
-export const getB2BQuoteDetail = (data: { id: number; date: string }) =>
+export const getB2BQuoteDetail = (data: { id: number; date: string; uuid?: string }) =>
   B3Request.graphqlB2B({
     query: getQuoteInfo(data),
   });
 
-export const getBcQuoteDetail = (data: { id: number; date: string }) =>
+export const getBcQuoteDetail = (data: { id: number; date: string; uuid?: string }) =>
   B3Request.graphqlB2B({
     query: getQuoteInfo(data),
   });

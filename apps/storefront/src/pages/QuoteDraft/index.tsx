@@ -9,13 +9,11 @@ import CustomButton from '@/components/button/CustomButton';
 import { getContrastColor } from '@/components/outSideComponents/utils/b3CustomStyles';
 import B3Spin from '@/components/spin/B3Spin';
 import { permissionLevels } from '@/constants';
-import {
-  dispatchEvent,
-  useFeatureFlags,
-  useMobile,
-  useSetCountry,
-  useValidatePermissionWithComparisonType,
-} from '@/hooks';
+import { dispatchEvent } from '@/hooks/useB2BCallback';
+import { useFeatureFlags } from '@/hooks/useFeatureFlags';
+import { useSetCountry } from '@/hooks/useGetCountry';
+import { useMobile } from '@/hooks/useMobile';
+import { useValidatePermissionWithComparisonType } from '@/hooks/useVerifyPermission';
 import { useB3Lang } from '@/lib/lang';
 import { CustomStyleContext } from '@/shared/customStyleButton';
 import { GlobalContext } from '@/shared/global';
@@ -41,11 +39,13 @@ import {
   QuoteInfo as QuoteInfoType,
   ShippingAddress,
 } from '@/types/quotes';
-import { B3LStorage, channelId, snackbar, storeHash } from '@/utils';
-import { verifyCreatePermission } from '@/utils/b3CheckPermissions';
+import { verifyCreatePermission } from '@/utils/b3CheckPermissions/check';
 import { b2bPermissionsMap } from '@/utils/b3CheckPermissions/config';
 import b2bLogger from '@/utils/b3Logger';
 import { addQuoteDraftProducts, getVariantInfoOOSAndPurchase } from '@/utils/b3Product/b3Product';
+import { B3LStorage } from '@/utils/b3Storage';
+import { snackbar } from '@/utils/b3Tip';
+import { channelId, storeHash } from '@/utils/basicConfig';
 import { deleteCartData } from '@/utils/cartUtils';
 import validateObject from '@/utils/quoteUtils';
 import { validateProducts } from '@/utils/validateProducts';
@@ -454,19 +454,21 @@ function QuoteDraft({ setOpenPage }: PageProps) {
 
   const addToQuote = async (products: CustomFieldItems[]) => {
     if (!isEnableProduct && isMoveStockAndBackorderValidationToBackend) {
-      const { validProducts, errors } = await validateProducts(products);
+      const { success, warning, error } = await validateProducts(products);
 
-      errors.forEach((error) => {
-        if (error.type === 'network') {
+      error.forEach((err) => {
+        if (err.error.type === 'network') {
           snackbar.error(
             b3Lang('quotes.productValidationFailed', {
-              productName: error.productName,
+              productName: err.product.node?.productName || '',
             }),
           );
         } else {
-          snackbar.error(error.message);
+          snackbar.error(err.error.message);
         }
       });
+
+      const validProducts = [...success, ...warning].map((product) => product.product);
 
       addQuoteDraftProducts(validProducts);
 
@@ -500,13 +502,15 @@ function QuoteDraft({ setOpenPage }: PageProps) {
   const handleAfterSubmit = (
     inpQuoteId?: string | number,
     inpCurrentCreatedAt?: string | number,
+    uuid?: string,
   ) => {
     const currentQuoteId = inpQuoteId || quoteId;
     const createdAt = inpCurrentCreatedAt || currentCreatedAt;
 
     if (currentQuoteId) {
       handleReset();
-      navigate(`/quoteDetail/${currentQuoteId}?date=${createdAt}`, {
+      const uuidParam = uuid ? `&uuid=${uuid}` : '';
+      navigate(`/quoteDetail/${currentQuoteId}?date=${createdAt}${uuidParam}`, {
         state: {
           to: 'draft',
         },
@@ -739,7 +743,7 @@ function QuoteDraft({ setOpenPage }: PageProps) {
 
       const {
         quoteCreate: {
-          quote: { id, createdAt },
+          quote: { id, createdAt, uuid: quoteUuid },
         },
       } = response;
 
@@ -754,7 +758,7 @@ function QuoteDraft({ setOpenPage }: PageProps) {
       }
 
       if (quoteSubmissionResponseInfo.value === '0') {
-        handleAfterSubmit(id, createdAt);
+        handleAfterSubmit(id, createdAt, quoteUuid);
       } else {
         setQuoteSubmissionResponseOpen(true);
       }

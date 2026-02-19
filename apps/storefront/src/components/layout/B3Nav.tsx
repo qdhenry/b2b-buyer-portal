@@ -2,7 +2,7 @@ import { useContext, useEffect, useMemo } from 'react';
 import { matchPath, useLocation, useNavigate } from 'react-router-dom';
 import { Badge, List, ListItem, ListItemButton, ListItemText, useTheme } from '@mui/material';
 
-import { useMobile } from '@/hooks';
+import { useMobile } from '@/hooks/useMobile';
 import { useB3Lang } from '@/lib/lang';
 import { DynamicallyVariableContext } from '@/shared/dynamicallyVariable';
 import { GlobalContext } from '@/shared/global';
@@ -14,8 +14,8 @@ import {
   setPagesSubsidiariesPermission,
 } from '@/store/slices/company';
 import { PagesSubsidiariesPermissionProps } from '@/types';
-import { B3SStorage } from '@/utils';
-import { validatePermissionWithComparisonType } from '@/utils/b3CheckPermissions';
+import { validatePermissionWithComparisonType } from '@/utils/b3CheckPermissions/check';
+import { B3SStorage } from '@/utils/b3Storage';
 
 import { b3HexToRgb, getContrastColor } from '../outSideComponents/utils/b3CustomStyles';
 
@@ -195,7 +195,7 @@ export default function B3Nav({ closeSidebar }: B3NavProps) {
     <List
       sx={{
         width: '100%',
-        maxWidth: 360,
+
         bgcolor: isMobile ? 'background.paper' : 'background.default',
         color: primaryColor || 'info.main',
         '& .MuiListItem-root': {

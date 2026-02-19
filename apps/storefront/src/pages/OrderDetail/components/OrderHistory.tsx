@@ -3,9 +3,9 @@ import styled from '@emotion/styled';
 import { Card, CardContent, Typography } from '@mui/material';
 
 import { B3Table, TableColumnItem } from '@/components/table/B3Table';
-import { useMobile } from '@/hooks';
+import { useMobile } from '@/hooks/useMobile';
 import { useB3Lang } from '@/lib/lang';
-import { displayExtendedFormat } from '@/utils';
+import { displayExtendedFormat } from '@/utils/b3DateFormat';
 
 import { OrderHistoryItem, OrderStatusItem } from '../../../types';
 import OrderStatus from '../../order/components/OrderStatus';
@@ -26,7 +26,7 @@ const HistoryListContainer = styled('div')(() => ({
   },
 }));
 
-export default function OrderHistory() {
+export function OrderHistory() {
   const b3Lang = useB3Lang();
   const {
     state: { history = [], orderStatus: orderStatusLabel = [], customStatus },

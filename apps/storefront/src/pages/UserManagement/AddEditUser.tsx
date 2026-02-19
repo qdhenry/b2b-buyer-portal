@@ -2,12 +2,14 @@ import { forwardRef, Ref, useEffect, useImperativeHandle, useState } from 'react
 import { useForm } from 'react-hook-form';
 import concat from 'lodash-es/concat';
 
-import { B3CustomForm } from '@/components';
+import { B3CustomForm } from '@/components/B3CustomForm';
 import B3Dialog from '@/components/B3Dialog';
 import { useB3Lang } from '@/lib/lang';
 import { useAppSelector } from '@/store';
 import { UserTypes } from '@/types';
-import { channelId, isKeyOf, snackbar } from '@/utils';
+import { snackbar } from '@/utils/b3Tip';
+import { channelId } from '@/utils/basicConfig';
+import { isKeyOf } from '@/utils/isKeyOf';
 
 import { addUser } from './addUser';
 import { checkUserEmail } from './checkUserEmail';

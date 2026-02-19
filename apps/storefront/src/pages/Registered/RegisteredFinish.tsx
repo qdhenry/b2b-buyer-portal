@@ -2,11 +2,11 @@ import { useContext, useRef } from 'react';
 import { Box } from '@mui/material';
 
 import { getContrastColor } from '@/components/outSideComponents/utils/b3CustomStyles';
-import { useMobile } from '@/hooks';
+import { useMobile } from '@/hooks/useMobile';
 import { useB3Lang } from '@/lib/lang';
 import { CustomStyleContext } from '@/shared/customStyleButton';
 import { GlobalContext } from '@/shared/global';
-import { B3SStorage } from '@/utils';
+import { B3SStorage } from '@/utils/b3Storage';
 
 import { RegisteredContext } from './context/RegisteredContext';
 import { PrimaryButton } from './PrimaryButton';

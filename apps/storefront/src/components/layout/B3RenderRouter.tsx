@@ -1,21 +1,18 @@
-import { lazy, Suspense, useContext, useEffect } from 'react';
+import { Suspense, useContext, useEffect } from 'react';
 import { Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 
-import { RegisteredProvider } from '@/pages/Registered/context/RegisteredContext';
+import B3Layout from '@/components/layout/B3Layout';
+import B3LayoutTip from '@/components/layout/B3LayoutTip';
 import { type SetOpenPage } from '@/pages/SetOpenPage';
 import { GlobalContext } from '@/shared/global';
-import { RouteFirstLevelItem, RouteItem } from '@/shared/routeList';
+import { RouteItem } from '@/shared/routeList';
 import { firstLevelRouting, getAllowedRoutes } from '@/shared/routes';
 import { getPageTranslations, useAppDispatch } from '@/store';
-import { channelId } from '@/utils';
+import { channelId } from '@/utils/basicConfig';
 
 import Loading from '../loading/Loading';
 
 import { RedirectFallback } from './B3FallbackRoute';
-
-const B3Layout = lazy(() => import('@/components/layout/B3Layout'));
-
-const B3LayoutTip = lazy(() => import('@/components/layout/B3LayoutTip'));
 
 interface B3RenderRouterProps {
   setOpenPage: SetOpenPage;
@@ -82,23 +79,9 @@ export default function B3RenderRouter(props: B3RenderRouterProps) {
             element={<RedirectFallback path={routes[0]?.path} setOpenPage={setOpenPage} />}
           />
         </Route>
-        {firstLevelRouting.map((route: RouteFirstLevelItem) => {
-          const { isProvider, path, component: Component } = route;
-          if (isProvider) {
-            return (
-              <Route
-                key={path}
-                path={path}
-                element={
-                  <RegisteredProvider>
-                    <Component setOpenPage={setOpenPage} />
-                  </RegisteredProvider>
-                }
-              />
-            );
-          }
-          return <Route key={path} path={path} element={<Component setOpenPage={setOpenPage} />} />;
-        })}
+        {firstLevelRouting.map(({ path, component: Component }) => (
+          <Route key={path} path={path} element={<Component setOpenPage={setOpenPage} />} />
+        ))}
       </Routes>
     </Suspense>
   );

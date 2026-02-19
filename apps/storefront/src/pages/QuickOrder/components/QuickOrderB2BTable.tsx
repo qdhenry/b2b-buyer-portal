@@ -5,21 +5,20 @@ import B3Spin from '@/components/spin/B3Spin';
 import { B3PaginationTable, GetRequestList } from '@/components/table/B3PaginationTable';
 import { TableColumnItem } from '@/components/table/B3Table';
 import { PRODUCT_DEFAULT_IMAGE } from '@/constants';
-import { useMobile, useSort } from '@/hooks';
+import { useMobile } from '@/hooks/useMobile';
+import { useSort } from '@/hooks/useSort';
 import { useB3Lang } from '@/lib/lang';
 import { getOrderedProducts, searchProducts } from '@/shared/service/b2b';
 import { activeCurrencyInfoSelector, useAppSelector } from '@/store';
 import { ProductInfoType } from '@/types/gql/graphql';
-import {
-  currencyFormat,
-  displayFormat,
-  distanceDay,
-  getProductPriceIncTaxOrExTaxBySetting,
-  snackbar,
-} from '@/utils';
 import b2bGetVariantImageByVariantInfo from '@/utils/b2bGetVariantImageByVariantInfo';
+import { currencyFormat } from '@/utils/b3CurrencyFormat';
+import { displayFormat } from '@/utils/b3DateFormat';
+import { distanceDay } from '@/utils/b3Picker';
+import { getProductPriceIncTaxOrExTaxBySetting } from '@/utils/b3Price';
 import { getDisplayPrice } from '@/utils/b3Product/b3Product';
 import { conversionProductsList } from '@/utils/b3Product/shared/config';
+import { snackbar } from '@/utils/b3Tip';
 
 import B3FilterMore from '../../../components/filter/B3FilterMore';
 import B3FilterPicker from '../../../components/filter/B3FilterPicker';
@@ -174,8 +173,10 @@ function QuickOrderTable({
         });
 
         return listProducts;
-      } catch (err: any) {
-        snackbar.error(err);
+      } catch (error: unknown) {
+        if (error instanceof Error) {
+          snackbar.error(error.message);
+        }
       }
     }
     return [];

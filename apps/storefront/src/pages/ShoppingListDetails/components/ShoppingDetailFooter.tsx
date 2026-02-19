@@ -1,20 +1,21 @@
-import { useContext, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { ArrowDropDown, Delete } from '@mui/icons-material';
 import { Box, Grid, Menu, MenuItem, Typography } from '@mui/material';
 import Cookies from 'js-cookie';
+import { useContext, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { v1 as uuid } from 'uuid';
 
 import CustomButton from '@/components/button/CustomButton';
 import { CART_URL, CHECKOUT_URL, PRODUCT_DEFAULT_IMAGE } from '@/constants';
-import { useFeatureFlags, useMobile } from '@/hooks';
+import { useFeatureFlags } from '@/hooks/useFeatureFlags';
+import { useMobile } from '@/hooks/useMobile';
 import { useB3Lang } from '@/lib/lang';
 import { GlobalContext } from '@/shared/global';
 import { getVariantInfoBySkus, searchProducts } from '@/shared/service/b2b/graphql/product';
 import { deleteCart, getCart } from '@/shared/service/bc/graphql/cart';
-import { rolePermissionSelector, useAppSelector } from '@/store';
+import { rolePermissionSelector, useAppSelector, useAppStore } from '@/store';
 import { ShoppingListStatus } from '@/types/shoppingList';
-import { currencyFormat, snackbar } from '@/utils';
+import { currencyFormat } from '@/utils/b3CurrencyFormat';
 import b2bLogger from '@/utils/b3Logger';
 import {
   addQuoteDraftProducts,
@@ -26,8 +27,10 @@ import {
   conversionProductsList,
   ProductsProps,
 } from '@/utils/b3Product/shared/config';
+import { snackbar } from '@/utils/b3Tip';
 import b3TriggerCartNumber from '@/utils/b3TriggerCartNumber';
 import { createOrUpdateExistingCart, deleteCartData, updateCart } from '@/utils/cartUtils';
+import { trackEcommerceEvent } from '@/utils/gtmDataLayer';
 import { validateProducts } from '@/utils/validateProducts';
 
 interface ShoppingDetailFooterProps {
@@ -87,6 +90,7 @@ function ShoppingDetailFooter(props: ShoppingDetailFooterProps) {
   const [isMobile] = useMobile();
   const b3Lang = useB3Lang();
   const navigate = useNavigate();
+  const store = useAppStore();
   const featureFlags = useFeatureFlags();
 
   const {
@@ -205,19 +209,21 @@ function ShoppingDetailFooter(props: ShoppingDetailFooterProps) {
 
   const addToQuote = async (products: CustomFieldItems[]) => {
     if (featureFlags['B2B-3318.move_stock_and_backorder_validation_to_backend']) {
-      const { validProducts, errors } = await validateProducts(products);
+      const { success, warning, error } = await validateProducts(products);
 
-      errors.forEach((error) => {
-        if (error.type === 'network') {
+      error.forEach((err) => {
+        if (err.error.type === 'network') {
           snackbar.error(
             b3Lang('quotes.productValidationFailed', {
-              productName: error.productName,
+              productName: err.product.node?.productName || '',
             }),
           );
         } else {
-          snackbar.error(error.message);
+          snackbar.error(err.error.message);
         }
       });
+
+      const validProducts = [...success, ...warning].map((product) => product.product);
 
       addQuoteDraftProducts(validProducts);
 
@@ -306,6 +312,16 @@ function ShoppingDetailFooter(props: ShoppingDetailFooterProps) {
       if (res && res.errors) {
         snackbar.error(res.errors[0].message);
       } else if (validateFailureArr.length === 0) {
+        // Verndale Customization: Pass store instance to trackEcommerceEvent
+        // Track add_to_cart event in GTM
+        await trackEcommerceEvent(
+          'add_to_cart',
+          validateSuccessArr,
+          shoppingListInfo?.name || 'Shopping List',
+          String(shoppingListInfo?.id || ''),
+          store,
+        );
+
         shouldRedirectCheckout();
       }
     }

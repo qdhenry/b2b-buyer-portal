@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
-import { useMobile } from '@/hooks';
+import { useMobile } from '@/hooks/useMobile';
 
 import { StyledNumberNoTopTextField } from './styled';
 
@@ -17,7 +17,7 @@ interface B3NumberTextFieldProps {
   sx?: CustomFieldItems;
 }
 
-export default function B3QuantityTextField(props: B3NumberTextFieldProps) {
+export function B3QuantityTextField(props: B3NumberTextFieldProps) {
   const [isMobile] = useMobile();
 
   const {

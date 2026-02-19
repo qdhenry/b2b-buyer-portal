@@ -4,8 +4,8 @@ import { Box, Card, CardContent, Link, Stack, Typography } from '@mui/material';
 import { format } from 'date-fns/format';
 import { getTracking } from 'ts-tracking-number';
 
-import { B3ProductList } from '@/components';
-import { useMobile } from '@/hooks';
+import { B3ProductList } from '@/components/B3ProductList';
+import { useMobile } from '@/hooks/useMobile';
 import { useB3Lang } from '@/lib/lang';
 
 import { OrderShippedItem, OrderShippingsItem } from '../../../types';
@@ -20,7 +20,7 @@ type OrderShippingProps = {
   isCurrentCompany: boolean;
 };
 
-export default function OrderShipping({ isCurrentCompany }: OrderShippingProps) {
+export function OrderShipping({ isCurrentCompany }: OrderShippingProps) {
   const {
     state: { shippings = [], addressLabelPermission, money },
   } = useContext(OrderDetailsContext);

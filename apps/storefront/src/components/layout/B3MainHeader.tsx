@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Box, Button, Grid, Typography } from '@mui/material';
 
 import { CART_URL } from '@/constants';
-import { dispatchEvent } from '@/hooks';
-import useMobile from '@/hooks/useMobile';
+import { dispatchEvent } from '@/hooks/useB2BCallback';
+import { useMobile } from '@/hooks/useMobile';
 import { useB3Lang } from '@/lib/lang';
 import { CustomStyleContext } from '@/shared/customStyleButton';
 import { isB2BUserSelector, rolePermissionSelector, useAppSelector } from '@/store';
@@ -20,6 +20,20 @@ export default function MainHeader({ title }: { title: string }) {
   const isB2BUser = useAppSelector(isB2BUserSelector);
   const role = useAppSelector(({ company }) => company.customer.role);
   const companyInfo = useAppSelector(({ company }) => company.companyInfo);
+  const extraFields = useAppSelector(({ company }) => company.companyInfo.extraFields);
+
+  const getCustomerId = () => {
+    if (!extraFields) return null;
+    const field = extraFields.find((f) => f.fieldName === 'Customer ID');
+    return field?.fieldValue?.trim() || null;
+  };
+
+  const customerId = getCustomerId();
+
+  // DEBUG: Log extraFields and customerId
+  console.log('[B3MainHeader] companyInfo:', companyInfo);
+  console.log('[B3MainHeader] extraFields:', extraFields);
+  console.log('[B3MainHeader] customerId:', customerId);
   const salesRepCompanyName = useAppSelector(
     ({ b2bFeatures }) => b2bFeatures.masqueradeCompany.companyName,
   );
@@ -158,6 +172,24 @@ export default function MainHeader({ title }: { title: string }) {
           </Box>
         </Box>
       </Box>
+      {customerId && (
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+          }}
+        >
+          <Typography
+            sx={{
+              color: '#333333',
+              fontWeight: 700,
+              fontSize: '14px',
+            }}
+          >
+            ACCOUNT ID: {customerId}
+          </Typography>
+        </Box>
+      )}
       {title && (
         <Box
           component="h3"

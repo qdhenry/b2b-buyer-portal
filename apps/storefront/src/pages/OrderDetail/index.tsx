@@ -5,7 +5,7 @@ import { Box, Grid, Stack, Typography } from '@mui/material';
 
 import { b3HexToRgb, getContrastColor } from '@/components/outSideComponents/utils/b3CustomStyles';
 import B3Spin from '@/components/spin/B3Spin';
-import { useMobile } from '@/hooks';
+import { useMobile } from '@/hooks/useMobile';
 import { useB3Lang } from '@/lib/lang';
 import { CustomStyleContext } from '@/shared/customStyleButton';
 import { GlobalContext } from '@/shared/global';
@@ -20,21 +20,25 @@ import { isB2BUserSelector, useAppSelector } from '@/store';
 import { AddressConfigItem, CustomerRole, OrderProductItem, OrderStatusItem } from '@/types';
 import b2bLogger from '@/utils/b3Logger';
 
+import { type OrderData, useOrderCustomizations } from '../customizations';
 import OrderStatus from '../order/components/OrderStatus';
 import { orderStatusTranslationVariables } from '../order/shared/getOrderStatus';
 
+import { DetailPagination } from './components/DetailPagination';
+import { OrderAction } from './components/OrderAction';
+import { OrderBilling } from './components/OrderBilling';
+import { OrderHistory } from './components/OrderHistory';
+import { OrderShipping } from './components/OrderShipping';
 import { OrderDetailsContext, OrderDetailsProvider } from './context/OrderDetailsContext';
 import convertB2BOrderDetails from './shared/B2BOrderData';
-import {
-  DetailPagination,
-  OrderAction,
-  OrderBilling,
-  OrderHistory,
-  OrderShipping,
-} from './components';
 
 interface LocationState {
   isCompanyOrder: boolean;
+}
+
+interface OrderDetailParams extends Record<string, string | undefined> {
+  bcOrderId: string;
+  epicorOrderId?: string;
 }
 
 function OrderDetail() {
@@ -53,7 +57,7 @@ function OrderDetail() {
       : Number(companyInfoId);
   const currentCompanyId = Number(selectCompanyHierarchyId) || companyId;
 
-  const params = useParams();
+  const { bcOrderId, epicorOrderId } = useParams<OrderDetailParams>();
 
   const navigate = useNavigate();
 
@@ -93,10 +97,22 @@ function OrderDetail() {
   const [orderId, setOrderId] = useState('');
   const [isRequestLoading, setIsRequestLoading] = useState(false);
   const [isCurrentCompany, setIsCurrentCompany] = useState(false);
+  const [orderData, setOrderData] = useState<OrderData | null>(null);
 
+  // STATLAB CUSTOMIZATION: Initialize custom order data handling
+  const { epicorOrderId: extractedEpicorOrderId, getDisplayOrderId } = useOrderCustomizations({
+    order: orderData,
+  });
+
+  // STATLAB CUSTOMIZATION: Determine if we have any epicorOrderId (from URL or order data)
+  const hasEpicorOrderId = Boolean(epicorOrderId || extractedEpicorOrderId);
+
+  // STATLAB CUSTOMIZATION: bcOrderId is always available in URL for reliable API lookups
   useEffect(() => {
-    setOrderId(params.id || '');
-  }, [params]);
+    if (bcOrderId) {
+      setOrderId(bcOrderId);
+    }
+  }, [bcOrderId]);
 
   const goToOrders = () => {
     navigate((location.state as LocationState).isCompanyOrder ? '/company-orders' : '/orders');
@@ -105,8 +121,11 @@ function OrderDetail() {
   useEffect(() => {
     if (orderId) {
       const getOrderDetails = async () => {
+        // STATLAB CUSTOMIZATION: orderId is always the BC Order ID from URL params
         const id = parseInt(orderId, 10);
+
         if (!id) {
+          setIsRequestLoading(false);
           return;
         }
 
@@ -114,9 +133,11 @@ function OrderDetail() {
 
         try {
           const order = isB2BUser ? await getB2BOrderDetails(id) : await getBCOrderDetails(id);
-
           if (order) {
             const { products, companyInfo } = order;
+
+            // STATLAB CUSTOMIZATION: Store raw order data for customization hook
+            setOrderData(order);
 
             const newOrder = {
               ...order,
@@ -270,18 +291,28 @@ function OrderDetail() {
               order: isMobile ? 1 : 0,
             }}
           >
-            <Typography
-              variant="h4"
-              sx={{
-                color: b3HexToRgb(customColor, 0.87) || '#263238',
-              }}
-            >
-              {b3Lang('orderDetail.orderId', { orderId })}
-              {b3Lang('orderDetail.purchaseOrderNumber', {
-                purchaseOrderNumber: poNumber ?? '',
-              })}
-            </Typography>
-            <OrderStatus code={status} text={getOrderStatusLabel(status)} />
+            {/* STATLAB CUSTOMIZATION: Only show order headline when epicorOrderId exists */}
+            {hasEpicorOrderId && (
+              <>
+                <Typography
+                  variant="h4"
+                  sx={{
+                    color: b3HexToRgb(customColor, 0.87) || '#263238',
+                  }}
+                >
+                  {/* STATLAB CUSTOMIZATION: Display Epicor Order ID instead of BC Order ID */}
+                  {/* Use epicorOrderId from URL params immediately to prevent flash */}
+                  {b3Lang('orderDetail.orderId', {
+                    orderId: epicorOrderId || getDisplayOrderId(orderId),
+                  })}
+                  {poNumber &&
+                    b3Lang('orderDetail.purchaseOrderNumber', {
+                      purchaseOrderNumber: poNumber,
+                    })}
+                </Typography>
+                <OrderStatus code={status} text={getOrderStatusLabel(status)} />
+              </>
+            )}
           </Grid>
           <Grid
             container

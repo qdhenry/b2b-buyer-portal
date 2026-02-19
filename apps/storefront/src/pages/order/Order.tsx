@@ -1,16 +1,33 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Box } from '@mui/material';
+import { Box, Skeleton } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 
-import { B2BAutoCompleteCheckbox } from '@/components';
-import B3Filter from '@/components/filter/B3Filter';
+// STATLAB CUSTOMIZATION: B3Filter hidden - import kept for potential future use
+// import B3Filter from '@/components/filter/B3Filter';
 import B3Spin from '@/components/spin/B3Spin';
-import { useMobile } from '@/hooks';
+import { B3Tag } from '@/components/B3Tag';
+import { B2BAutoCompleteCheckbox } from '@/components/ui/B2BAutoCompleteCheckbox';
+import { useMobile } from '@/hooks/useMobile';
 import { useB3Lang } from '@/lib/lang';
 import { isB2BUserSelector, useAppSelector } from '@/store';
 import { CustomerRole } from '@/types';
-import { currencyFormat, displayFormat, ordersCurrencyFormat } from '@/utils';
+import { currencyFormat, ordersCurrencyFormat } from '@/utils/b3CurrencyFormat';
+import { displayFormat } from '@/utils/b3DateFormat';
+import b2bLogger from '@/utils/b3Logger';
+
+import {
+  type ExtraField,
+  getB2BAllOrders,
+  getBCAllOrders,
+  getBcOrderStatusType,
+  getEpicorOrderId,
+  getOrdersCreatedByUser,
+  getOrdersExtraFieldsProgressive,
+  getOrderStatusType,
+} from '../customizations';
+// Import metafield API directly to avoid circular dependency
+import { getEpicorOrderIdsFromMetafieldsProgressive } from '../customizations/api/orderMetafields';
 
 import OrderStatus from './components/OrderStatus';
 import { orderStatusTranslationVariables } from './shared/getOrderStatus';
@@ -25,13 +42,6 @@ import {
   sortKeys,
 } from './config';
 import { OrderItemCard } from './OrderItemCard';
-import {
-  getB2BAllOrders,
-  getBCAllOrders,
-  getBcOrderStatusType,
-  getOrdersCreatedByUser,
-  getOrderStatusType,
-} from './orders';
 
 interface CompanyInfoProps {
   companyId: string;
@@ -56,14 +66,8 @@ interface ListItem {
   createdAt: string;
   companyName: string;
   companyInfo?: CompanyInfoProps;
-}
-
-interface SearchChangeProps {
-  startValue?: string;
-  endValue?: string;
-  PlacedBy?: string;
-  orderStatus?: string | number;
-  company?: string;
+  extraInfo?: string;
+  extraFields?: ExtraField[];
 }
 
 interface OrderProps {
@@ -130,15 +134,59 @@ function Order({ isCompanyOrder = false }: OrderProps) {
   const { role, isAgenting, companyId, isB2BUser, isEnabledCompanyHierarchy, selectedCompanyId } =
     useData();
 
-  const [pagination, setPagination] = useState({ offset: 0, first: 10 });
+  // Persist pagination perPage preference in sessionStorage
+  const PAGINATION_STORAGE_KEY = 'b2b_orders_pagination';
+
+  const [pagination, setPaginationState] = useState(() => {
+    try {
+      const stored = sessionStorage.getItem(PAGINATION_STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return { offset: 0, first: parsed.first ?? 10 };
+      }
+    } catch {
+      // Ignore parse errors
+    }
+    return { offset: 0, first: 10 };
+  });
+
+  // Wrapper to persist pagination changes
+  const setPagination = (
+    newPagination:
+      | { offset: number; first: number }
+      | ((prev: { offset: number; first: number }) => { offset: number; first: number }),
+  ) => {
+    setPaginationState((prev) => {
+      const next = typeof newPagination === 'function' ? newPagination(prev) : newPagination;
+      // Persist perPage preference
+      try {
+        sessionStorage.setItem(PAGINATION_STORAGE_KEY, JSON.stringify({ first: next.first }));
+      } catch {
+        // Ignore storage errors
+      }
+      return next;
+    });
+  };
 
   const [allTotal, setAllTotal] = useState(0);
   const [filterData, setFilterData] = useState<Partial<FilterSearchProps>>();
-  const [filterInfo, setFilterInfo] = useState<Array<any>>([]);
+
+  const [, setFilterInfo] = useState<Array<any>>([]);
   const [getOrderStatuses, setOrderStatuses] = useState<Array<any>>([]);
 
+  // STATLAB CUSTOMIZATION: Store enriched extra fields and track loading state
+  const [extraFieldsMap, setExtraFieldsMap] = useState<Record<string, ExtraField[]>>({});
+  // Track which order IDs are currently loading their extraFields
+  const [loadingOrderIds, setLoadingOrderIds] = useState<Set<string>>(new Set());
+  // Ref to track current page's order IDs to prevent stale updates
+  const currentPageOrderIdsRef = useRef<Set<string>>(new Set());
+  // STATLAB CUSTOMIZATION: Store metafield epicor IDs as fallback when not in extraFields
+  const [metafieldEpicorIds, setMetafieldEpicorIds] = useState<Record<string, string>>({});
+  // Track which order IDs are loading metafields
+  const [loadingMetafieldIds, setLoadingMetafieldIds] = useState<Set<string>>(new Set());
+
   const [orderBy, setOrderBy] = useState<OrderBy>({
-    key: 'orderId',
+    key: 'createdAt',
     dir: 'desc',
   });
 
@@ -159,6 +207,48 @@ function Order({ isCompanyOrder = false }: OrderProps) {
       };
     });
   };
+
+  // STATLAB CUSTOMIZATION: Fetch metafields as fallback when extraFields don't have epicorOrderId
+  useEffect(() => {
+    // Only proceed when extraFields loading is complete
+    if (loadingOrderIds.size > 0) return;
+    if (currentPageOrderIdsRef.current.size === 0) return;
+
+    // Find orders that don't have epicorOrderId in extraFields
+    const orderIdsNeedingMetafields: string[] = [];
+    currentPageOrderIdsRef.current.forEach((orderId) => {
+      // Check if we already have epicorOrderId from extraFields
+      const extraFields = extraFieldsMap[orderId] || [];
+      const hasEpicorId = extraFields.some((f) => f.fieldName === 'epicorOrderId' && f.fieldValue);
+
+      // Check if we already fetched/are fetching metafield for this order
+      const alreadyHasMetafield = metafieldEpicorIds[orderId] !== undefined;
+      const isLoadingMetafield = loadingMetafieldIds.has(orderId);
+
+      if (!hasEpicorId && !alreadyHasMetafield && !isLoadingMetafield) {
+        orderIdsNeedingMetafields.push(orderId);
+      }
+    });
+
+    if (orderIdsNeedingMetafields.length === 0) return;
+
+    // Mark these orders as loading metafields
+    setLoadingMetafieldIds((prev) => new Set([...prev, ...orderIdsNeedingMetafields]));
+
+    // Fetch metafields progressively
+    getEpicorOrderIdsFromMetafieldsProgressive(orderIdsNeedingMetafields, (accumulated) => {
+      setMetafieldEpicorIds((prev) => ({ ...prev, ...accumulated }));
+      // Remove loaded IDs from loading set
+      setLoadingMetafieldIds((prev) => {
+        const next = new Set(prev);
+        Object.keys(accumulated).forEach((id) => next.delete(id));
+        return next;
+      });
+    }).catch((e) => {
+      b2bLogger.error('Error fetching metafield epicor IDs', e);
+      setLoadingMetafieldIds(new Set());
+    });
+  }, [loadingOrderIds, extraFieldsMap, metafieldEpicorIds, loadingMetafieldIds]);
 
   useEffect(() => {
     const search = isB2BUser
@@ -219,18 +309,88 @@ function Order({ isCompanyOrder = false }: OrderProps) {
     createdBy,
     ...params
   }: Partial<FilterSearchProps>): Promise<{ edges: ListItem[]; totalCount: number }> => {
-    const { edges = [], totalCount } = isB2BUser
-      ? await getB2BAllOrders({
-          ...params,
-          email: getEmail(createdBy),
-          createdBy: getName(createdBy),
-        })
-      : await getBCAllOrders(params);
+    let edges: any[] = [];
+    let totalCount = 0;
+
+    if (isB2BUser) {
+      // Use GraphQL for B2B users - REST API only returns recent orders
+      const result = await getB2BAllOrders({
+        ...params,
+        email: getEmail(createdBy),
+        createdBy: getName(createdBy),
+      });
+      edges = result.edges || [];
+      totalCount = result.totalCount;
+
+      // PROGRESSIVE LOADING: Show skeleton while loading, update each row as its data arrives
+      const idsToFetch = edges
+        .map((item: any) => String(item.node.orderId))
+        .filter((id: any) => id);
+      if (idsToFetch.length > 0) {
+        // Track current page's order IDs and set them as loading
+        currentPageOrderIdsRef.current = new Set(idsToFetch);
+        setLoadingOrderIds(new Set(idsToFetch));
+        // Clear previous extraFields and metafields for new page
+        setExtraFieldsMap({});
+        setMetafieldEpicorIds({});
+        setLoadingMetafieldIds(new Set());
+
+        getOrdersExtraFieldsProgressive(idsToFetch, true, (accumulated) => {
+          // Only update if these are still the current page's orders
+          if (currentPageOrderIdsRef.current.size > 0) {
+            setExtraFieldsMap(accumulated);
+            // Remove loaded IDs from loading set
+            setLoadingOrderIds((prev) => {
+              const next = new Set(prev);
+              Object.keys(accumulated).forEach((id) => next.delete(id));
+              return next;
+            });
+          }
+        }).catch((e) => {
+          b2bLogger.error('Error fetching extra fields', e);
+          setLoadingOrderIds(new Set());
+        });
+      }
+    } else {
+      // Keep GraphQL for BC customers
+      const result = await getBCAllOrders(params);
+      edges = result.edges || [];
+      totalCount = result.totalCount;
+
+      // PROGRESSIVE LOADING: Same pattern for BC customers
+      const idsToFetch = edges
+        .map((item: any) => String(item.node.orderId))
+        .filter((id: any) => id);
+      if (idsToFetch.length > 0) {
+        currentPageOrderIdsRef.current = new Set(idsToFetch);
+        setLoadingOrderIds(new Set(idsToFetch));
+        // Clear previous extraFields and metafields for new page
+        setExtraFieldsMap({});
+        setMetafieldEpicorIds({});
+        setLoadingMetafieldIds(new Set());
+
+        getOrdersExtraFieldsProgressive(idsToFetch, false, (accumulated) => {
+          if (currentPageOrderIdsRef.current.size > 0) {
+            setExtraFieldsMap(accumulated);
+            setLoadingOrderIds((prev) => {
+              const next = new Set(prev);
+              Object.keys(accumulated).forEach((id) => next.delete(id));
+              return next;
+            });
+          }
+        }).catch((e) => {
+          b2bLogger.error('Error fetching extra fields in fetchList', e);
+          setLoadingOrderIds(new Set());
+        });
+      }
+    }
 
     setAllTotal(totalCount);
 
     return {
-      edges: edges.map((row: PossibleNodeWrapper<object>) => ('node' in row ? row.node : row)),
+      edges: edges.map((row: PossibleNodeWrapper<object>) =>
+        'node' in row ? row.node : row,
+      ) as ListItem[],
       totalCount,
     };
   };
@@ -238,12 +398,30 @@ function Order({ isCompanyOrder = false }: OrderProps) {
   const navigate = useNavigate();
 
   const goToDetail = (item: ListItem, index: number) => {
-    navigate(`/orderDetail/${item.orderId}`, {
+    // STATLAB CUSTOMIZATION: Dual-parameter URL with bcOrderId first (for API lookups)
+    // and epicorOrderId second (for user-friendly URL display)
+    const itemWithExtraFields = {
+      ...item,
+      extraFields: extraFieldsMap[item.orderId] || item.extraFields,
+    };
+    // First try extraFields, then metafield fallback
+    const epicorId =
+      getEpicorOrderId(itemWithExtraFields) || metafieldEpicorIds[String(item.orderId)] || '';
+
+    // Build URL: /orderDetail/{bcOrderId}/{epicorOrderId?}
+    const url = epicorId
+      ? `/orderDetail/${item.orderId}/${epicorId}`
+      : `/orderDetail/${item.orderId}`;
+
+    navigate(url, {
       state: {
         currentIndex: index,
         searchParams: {
           ...filterData,
           orderBy: getOrderBy(orderBy),
+          offset: pagination.offset,
+          // Note: first is NOT passed here - perPage is persisted via sessionStorage
+          // and DetailPagination uses its own first: 3 for fetching adjacent orders
         },
         totalCount: allTotal,
         isCompanyOrder,
@@ -258,8 +436,44 @@ function Order({ isCompanyOrder = false }: OrderProps) {
       key: 'orderId',
       title: b3Lang('orders.order'),
       width: '10%',
-      isSortable: true,
-      render: ({ orderId }) => orderId,
+      isSortable: false,
+      render: (item) => {
+        // STATLAB CUSTOMIZATION: Display Epicor Order ID with skeleton loader
+        const orderIdStr = String(item.orderId);
+        const isLoadingExtraFields = loadingOrderIds.has(orderIdStr);
+        const isLoadingMetafields = loadingMetafieldIds.has(orderIdStr);
+
+        // Show skeleton while loading extraFields
+        if (isLoadingExtraFields) {
+          return <Skeleton variant="text" width={80} height={24} />;
+        }
+
+        // First try extraFields
+        const itemWithExtraFields = {
+          ...item,
+          extraFields: extraFieldsMap[item.orderId] || item.extraFields,
+        };
+        const epicorIdFromExtraFields = getEpicorOrderId(itemWithExtraFields);
+
+        if (epicorIdFromExtraFields) {
+          return epicorIdFromExtraFields;
+        }
+
+        // Show skeleton while loading metafields fallback
+        if (isLoadingMetafields) {
+          return <Skeleton variant="text" width={80} height={24} />;
+        }
+
+        // Fallback to metafield value
+        const epicorIdFromMetafield = metafieldEpicorIds[orderIdStr];
+        return (
+          epicorIdFromMetafield || (
+            <B3Tag color="#9e9e9e" textColor="#fff" fontSize="11px" padding="2px 8px">
+              <i>In processing</i>
+            </B3Tag>
+          )
+        );
+      },
     },
     {
       key: 'companyName',
@@ -280,10 +494,19 @@ function Order({ isCompanyOrder = false }: OrderProps) {
     {
       key: 'totalIncTax',
       title: b3Lang('orders.grandTotal'),
-      render: ({ money, totalIncTax }) =>
-        money
-          ? ordersCurrencyFormat(JSON.parse(JSON.parse(money)), totalIncTax)
-          : currencyFormat(totalIncTax),
+      render: ({ money, totalIncTax }) => {
+        if (!money) return currencyFormat(totalIncTax);
+        try {
+          let parsed = JSON.parse(money);
+          // Handle double-encoded JSON (legacy GraphQL format)
+          if (typeof parsed === 'string') {
+            parsed = JSON.parse(parsed);
+          }
+          return ordersCurrencyFormat(parsed, totalIncTax);
+        } catch {
+          return currencyFormat(totalIncTax);
+        }
+      },
       align: 'right',
       width: '8%',
       isSortable: true,
@@ -294,7 +517,7 @@ function Order({ isCompanyOrder = false }: OrderProps) {
       render: ({ status }) => (
         <OrderStatus text={getOrderStatusText(status, getOrderStatuses)} code={status} />
       ),
-      width: '10%',
+      width: '12%',
       isSortable: true,
     },
     {
@@ -308,7 +531,7 @@ function Order({ isCompanyOrder = false }: OrderProps) {
       key: 'createdAt',
       title: b3Lang('orders.createdOn'),
       render: ({ createdAt }) => `${displayFormat(Number(createdAt))}`,
-      width: '10%',
+      width: '8%',
       isSortable: true,
     },
   ] as const satisfies TableColumnItem<ListItem>[];
@@ -326,35 +549,6 @@ function Order({ isCompanyOrder = false }: OrderProps) {
     });
 
     return getNewColumnItems;
-  };
-
-  const handleChange = (key: string, value: string) => {
-    if (key === 'search') {
-      setFilterData((data) => ({
-        ...data,
-        q: value,
-      }));
-    }
-  };
-
-  const handleFilterChange = (value: SearchChangeProps) => {
-    let currentStatus = value?.orderStatus || '';
-    if (currentStatus) {
-      const originStatus = getOrderStatuses.find(
-        (status) => status.customLabel === currentStatus || status.systemLabel === currentStatus,
-      );
-
-      currentStatus = originStatus?.systemLabel || currentStatus;
-    }
-
-    setFilterData((data) => ({
-      ...data,
-      beginDateAt: value?.startValue || null,
-      endDateAt: value?.endValue || null,
-      createdBy: value?.PlacedBy || '',
-      statusCode: currentStatus,
-      companyName: value?.company || '',
-    }));
   };
 
   const columnItems = getColumnItems();
@@ -402,26 +596,7 @@ function Order({ isCompanyOrder = false }: OrderProps) {
               <B2BAutoCompleteCheckbox handleChangeCompanyIds={handleSelectCompanies} />
             </Box>
           )}
-          <B3Filter
-            startPicker={{
-              isEnabled: true,
-              label: b3Lang('orders.from'),
-              defaultValue: filterData?.beginDateAt || null,
-              pickerKey: 'start',
-            }}
-            endPicker={{
-              isEnabled: true,
-              label: b3Lang('orders.to'),
-              defaultValue: filterData?.endDateAt || null,
-              pickerKey: 'end',
-            }}
-            filterMoreInfo={filterInfo}
-            handleChange={handleChange}
-            handleFilterChange={handleFilterChange}
-            pcTotalWidth="100%"
-            pcContainerWidth="100%"
-            pcSearchContainerWidth="100%"
-          />
+          {/* STATLAB CUSTOMIZATION: Search bar and filter button hidden per business requirements */}
         </Box>
 
         <B3Table
@@ -430,9 +605,21 @@ function Order({ isCompanyOrder = false }: OrderProps) {
           pagination={{ ...pagination, count: data?.totalCount || 0 }}
           onPaginationChange={setPagination}
           isInfiniteScroll={isMobile}
-          renderItem={(row, index) => (
-            <OrderItemCard key={row.orderId} goToDetail={() => goToDetail(row, index)} item={row} />
-          )}
+          renderItem={(row, index) => {
+            const itemWithExtraFields = {
+              ...row,
+              extraFields: extraFieldsMap[row.orderId] || row.extraFields,
+            };
+            const isLoadingRow = loadingOrderIds.has(String(row.orderId));
+            return (
+              <OrderItemCard
+                key={row.orderId}
+                goToDetail={() => goToDetail(row, index)}
+                item={itemWithExtraFields}
+                isLoading={isLoadingRow}
+              />
+            );
+          }}
           onClickRow={goToDetail}
           sortDirection={orderBy.dir}
           sortByFn={handleSetOrderBy}

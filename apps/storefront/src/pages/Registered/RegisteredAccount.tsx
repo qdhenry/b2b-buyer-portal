@@ -1,8 +1,8 @@
-import { ChangeEvent, MouseEvent, useContext, useState } from 'react';
+import { MouseEvent, useContext, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { Alert, Box, FormControl, FormControlLabel, Radio, RadioGroup } from '@mui/material';
+import { Alert, Box } from '@mui/material';
 
-import { B3CustomForm } from '@/components';
+import { B3CustomForm } from '@/components/B3CustomForm';
 import { b3HexToRgb, getContrastColor } from '@/components/outSideComponents/utils/b3CustomStyles';
 import { useB3Lang } from '@/lib/lang';
 import { CustomStyleContext } from '@/shared/customStyleButton';
@@ -12,8 +12,8 @@ import {
   validateBCCompanyUserExtraFields,
 } from '@/shared/service/b2b';
 import { themeFrameSelector, useAppSelector } from '@/store';
-import { channelId } from '@/utils';
 import b2bLogger from '@/utils/b3Logger';
+import { channelId } from '@/utils/basicConfig';
 
 import { RegisteredContext } from './context/RegisteredContext';
 import { Base64, emailError } from './config';
@@ -31,7 +31,6 @@ export default function RegisteredAccount({ handleNext }: RegisteredAccountProps
 
   const {
     state: {
-      accountLoginRegistration,
       portalStyle: { backgroundColor = '#FEF9F5' },
     },
   } = useContext(CustomStyleContext);
@@ -87,15 +86,6 @@ export default function RegisteredAccount({ handleNext }: RegisteredAccountProps
       type: 'loading',
       payload: {
         isLoading: isShow,
-      },
-    });
-  };
-
-  const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
-    dispatch({
-      type: 'accountType',
-      payload: {
-        accountType: event.target.value,
       },
     });
   };
@@ -238,46 +228,7 @@ export default function RegisteredAccount({ handleNext }: RegisteredAccountProps
           <TipContent>{errorTips}</TipContent>
         </Alert>
       )}
-      <FormControl
-        sx={{
-          '& h4': {
-            color: customColor,
-          },
-        }}
-      >
-        <InformationFourLabels>
-          {b3Lang('register.registeredAccount.accountType')}
-        </InformationFourLabels>
-        <RadioGroup
-          aria-labelledby="demo-row-radio-buttons-group-label"
-          name="row-radio-buttons-group"
-          value={accountType}
-          onChange={handleChange}
-          sx={{
-            '& .MuiTypography-root.MuiTypography-body1.MuiFormControlLabel-label': {
-              color: b3HexToRgb(customColor, 0.87),
-            },
-            '& .MuiButtonBase-root.MuiRadio-root.MuiRadio-colorPrimary:not(.Mui-checked)': {
-              color: b3HexToRgb(customColor, 0.6),
-            },
-          }}
-        >
-          {accountLoginRegistration.b2b && (
-            <FormControlLabel
-              value="1"
-              control={<Radio />}
-              label={b3Lang('register.registeredAccount.businessAccount')}
-            />
-          )}
-          {accountLoginRegistration.b2c && (
-            <FormControlLabel
-              value="2"
-              control={<Radio />}
-              label={b3Lang('register.registeredAccount.personalAccount')}
-            />
-          )}
-        </RadioGroup>
-      </FormControl>
+      {/* STATLAB CUSTOMIZATION: Account type selection removed - only business accounts allowed */}
       <Box
         sx={{
           '& h4': {

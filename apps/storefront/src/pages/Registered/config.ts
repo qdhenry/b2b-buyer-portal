@@ -3,7 +3,8 @@ import { format } from 'date-fns/format';
 
 import { LangFormatFunction } from '@/lib/lang';
 import { validateAddressExtraFields, validateBCCompanyExtraFields } from '@/shared/service/b2b';
-import { getLineNumber, validatorRules } from '@/utils';
+import { getLineNumber } from '@/utils/b3GetTextLenPX';
+import { validatorRules } from '@/utils/validatorRules';
 
 import { RegisterFields } from './types';
 
@@ -323,7 +324,7 @@ const conversionItemFormat = (FormFields: AccountFormFieldsList) => {
 
     if (obj.label.length > 0) {
       let originPaddingTop = 25;
-      const isMobile = document.body.clientWidth <= 750;
+      const isMobile = document.body.clientWidth <= 1024;
       let lineNumber = getLineNumber(obj.label, 16);
 
       if (obj.fieldType === 'multiline') {

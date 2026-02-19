@@ -1,4 +1,4 @@
-import { convertArrayToGraphql } from '../../../../utils';
+import { convertArrayToGraphql } from '../../../../utils/graphqlDataConvert';
 import B3Request from '../../request/b3Fetch';
 
 const invoiceList = (data: CustomFieldItems) => `
@@ -6,7 +6,7 @@ query GetInvoices {
   invoices (
     search: "${data.q || ''}"
     first: ${data.first}
-    offset: ${data.offset} 
+    offset: ${data.offset}
     ${data?.status ? `status: ${convertArrayToGraphql(data.status ? [data.status] : [])}` : ''}
     ${data?.beginDateAt ? `beginDateAt: "${data.beginDateAt}"` : ''}
     ${data?.endDateAt ? `endDateAt: "${data.endDateAt}"` : ''}
@@ -57,6 +57,10 @@ query GetInvoices {
           bcId,
         },
         orderUserId,
+        extraFields {
+          fieldName,
+          fieldValue,
+        },
       }
     }
   }
@@ -151,6 +155,10 @@ query GetInvoiceDetails {
     originalBalance {
       code,
       value,
+    },
+    extraFields {
+      fieldName,
+      fieldValue,
     },
   }
 }`;

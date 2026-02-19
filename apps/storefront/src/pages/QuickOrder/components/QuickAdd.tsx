@@ -1,23 +1,29 @@
+import { Box, Grid, Typography } from '@mui/material';
 import { Fragment, KeyboardEventHandler, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { Box, Grid, Typography } from '@mui/material';
 
 import CustomButton from '@/components/button/CustomButton';
-import B3ControlTextField from '@/components/form/B3ControlTextField';
+import { B3ControlTextField } from '@/components/form/B3ControlTextField';
 import B3Spin from '@/components/spin/B3Spin';
 import { CART_URL } from '@/constants';
-import { useBlockPendingAccountViewPrice, useFeatureFlags } from '@/hooks';
+import { useBlockPendingAccountViewPrice } from '@/hooks/useBlockPendingAccountViewPrice';
+import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 import { useB3Lang } from '@/lib/lang';
 import { getVariantInfoBySkus } from '@/shared/service/b2b';
-import { useAppSelector } from '@/store';
-import { snackbar } from '@/utils';
+import { store, useAppSelector } from '@/store';
+import { snackbar } from '@/utils/b3Tip';
 import b3TriggerCartNumber from '@/utils/b3TriggerCartNumber';
 import { createOrUpdateExistingCart } from '@/utils/cartUtils';
-import { validateProducts, ValidationError } from '@/utils/validateProducts';
+import {
+  ValidatedProductError,
+  ValidatedProductWarning,
+  validateProducts,
+} from '@/utils/validateProducts';
 
 import { SimpleObject } from '../../../types';
 import { getCartProductInfo } from '../utils';
 
+import { trackEcommerceEvent } from '@/utils/gtmDataLayer';
 import {
   CatalogProduct,
   filterInputSkusForNotFoundProducts,
@@ -323,7 +329,7 @@ export default function QuickAdd() {
     productItems: CustomFieldItems[];
     passSku: string[];
     notFoundSkus: string[];
-    validationErrors: ValidationError[];
+    validationErrors: (ValidatedProductWarning | ValidatedProductError)[];
   }> => {
     const notFoundSkus = filterInputSkusForNotFoundProducts(skus, variantInfoList);
 
@@ -333,7 +339,11 @@ export default function QuickAdd() {
 
     const productsToValidate = mapCatalogToValidationPayload(variantInfoList, skuValue);
 
-    const { validProducts, errors } = await validateProducts(productsToValidate);
+    const { success, warning, error } = await validateProducts(productsToValidate);
+
+    const validProducts = success.map((product) => product.product);
+
+    const errors = [...warning, ...error];
 
     const productItems = mergeValidatedWithCatalog(validProducts, variantInfoList);
 
@@ -382,19 +392,32 @@ export default function QuickAdd() {
 
         const variantInfoList = await getVariantList(skus);
 
+        let dataLayerItems: {
+          productId: number;
+          variantId: number;
+          quantity: number;
+          optionList: CustomFieldItems;
+          productName: string;
+          basePrice: number;
+        }[] = [];
+
         if (featureFlags['B2B-3318.move_stock_and_backorder_validation_to_backend']) {
           const result = await handleBackendValidation(variantInfoList, skuQuantityMap, skus);
           const { productItems, passSku, notFoundSkus, validationErrors } = result;
 
-          validationErrors.forEach((error) => {
-            if (error.type === 'network') {
-              snackbar.error(
-                b3Lang('quotes.productValidationFailed', {
-                  productName: error.productName,
-                }),
-              );
+          validationErrors.forEach((err) => {
+            if (err.status === 'error') {
+              if (err.error.type === 'network') {
+                snackbar.error(
+                  b3Lang('quotes.productValidationFailed', {
+                    productName: err.product.node?.productName || '',
+                  }),
+                );
+              } else {
+                snackbar.error(err.error.message);
+              }
             } else {
-              snackbar.error(error.message);
+              snackbar.error(err.message);
             }
           });
 
@@ -407,6 +430,14 @@ export default function QuickAdd() {
           }
 
           if (productItems.length > 0) {
+            dataLayerItems = productItems.map((item) => ({
+              productId: Number(item.productId),
+              variantId: Number(item.variantId),
+              quantity: Number(item.quantity),
+              optionList: item.optionList ?? [],
+              productName: item.productName,
+              basePrice: item.calculatedPrice ? Number(item.calculatedPrice) : 0,
+            }));
             await addProductsToCart(productItems);
             clearInputValue(formData, passSku);
           }
@@ -419,10 +450,43 @@ export default function QuickAdd() {
           );
 
           if (productItems.length > 0) {
+            dataLayerItems = productItems.map((item) => ({
+              ...item,
+              productId: Number(item.productId),
+              variantId: Number(item.variantId),
+              quantity: Number(item.quantity),
+              optionList: item.optionList ?? [],
+              productName: item.productName,
+              basePrice: item.calculatedPrice ? Number(item.calculatedPrice) : 0,
+            }));
+
             await addProductsToCart(productItems);
             clearInputValue(formData, passSku);
           }
         }
+
+        // Verndale Customization: Track add to cart event in GTM
+        await trackEcommerceEvent(
+          'add_to_cart',
+          dataLayerItems.map((item) => ({
+            node: {
+              ...item,
+              productId: item.productId.toString(),
+              optionList:
+                item.optionList?.length > 0
+                  ? item.optionList
+                      .map((option: { optionValue: string }) => option.optionValue)
+                      .join(',')
+                  : '',
+              productName: item.productName,
+              basePrice: item.basePrice,
+            },
+          })),
+          'Quick Order',
+          '',
+          store,
+        );
+        // End Verndale Customization
       } catch (e) {
         if (e instanceof Error) {
           snackbar.error(e.message);
