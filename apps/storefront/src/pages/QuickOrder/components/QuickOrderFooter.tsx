@@ -1,5 +1,6 @@
 import { ArrowDropDown } from '@mui/icons-material';
 import { Box, Grid, Menu, MenuItem, SxProps, Typography, useMediaQuery } from '@mui/material';
+import { groupBy } from 'lodash-es';
 import uniq from 'lodash-es/uniq';
 import { Dispatch, SetStateAction, useContext, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -7,7 +8,7 @@ import { v1 as uuid } from 'uuid';
 
 import CustomButton from '@/components/button/CustomButton';
 import { CART_URL, PRODUCT_DEFAULT_IMAGE } from '@/constants';
-import { useFeatureFlags } from '@/hooks/useFeatureFlags';
+import { useIsBackorderEnabled } from '@/hooks/useIsBackorderEnabled';
 import { useMobile } from '@/hooks/useMobile';
 import { useB3Lang } from '@/lib/lang';
 import { GlobalContext } from '@/shared/global';
@@ -36,7 +37,10 @@ import { conversionProductsList } from '@/utils/b3Product/shared/config';
 import { snackbar } from '@/utils/b3Tip';
 import b3TriggerCartNumber from '@/utils/b3TriggerCartNumber';
 import { createOrUpdateExistingCart } from '@/utils/cartUtils';
-import { validateProducts } from '@/utils/validateProducts';
+import {
+  convertStockAndThresholdValidationErrorToWarning,
+  validateProductsLegacy,
+} from '@/utils/validateProducts';
 
 import { trackEcommerceEvent } from '@/utils/gtmDataLayer';
 import CreateShoppingList from '../../OrderDetail/components/CreateShoppingList';
@@ -111,13 +115,11 @@ function QuickOrderFooter(props: QuickOrderFooterProps) {
     state: { productQuoteEnabled = false, shoppingListEnabled = false },
   } = useContext(GlobalContext);
   const b3Lang = useB3Lang();
-  const featureFlags = useFeatureFlags();
 
   const companyInfoId = useAppSelector((state) => state.company.companyInfo.id);
   const { currency_code: currencyCode } = useAppSelector(activeCurrencyInfoSelector);
   const { purchasabilityPermission } = useAppSelector(rolePermissionSelector);
-  const backendValidationEnabled =
-    featureFlags['B2B-3318.move_stock_and_backorder_validation_to_backend'] ?? false;
+  const isBackorderEnabled = useIsBackorderEnabled();
 
   const isShowCartAction = isB2BUser ? purchasabilityPermission : true;
 
@@ -241,7 +243,7 @@ function QuickOrderFooter(props: QuickOrderFooterProps) {
     setIsRequestLoading(true);
     handleClose();
 
-    if (backendValidationEnabled) {
+    if (isBackorderEnabled) {
       handleBackendAddSelectedToCart();
     } else {
       handleFrontedAddSelectedToCart();
@@ -267,33 +269,74 @@ function QuickOrderFooter(props: QuickOrderFooterProps) {
     return option;
   };
 
-  const addToQuote = async (products: CustomFieldItems[]) => {
-    if (featureFlags['B2B-3318.move_stock_and_backorder_validation_to_backend']) {
-      const { success, warning, error } = await validateProducts(products);
+  const addToQuoteBackend = async (products: CustomFieldItems[]) => {
+    const validatedProducts = await validateProductsLegacy(products);
+    const { success, warning, error } =
+      convertStockAndThresholdValidationErrorToWarning(validatedProducts);
 
-      error.forEach((err) => {
-        if (err.error.type === 'network') {
-          snackbar.error(
-            b3Lang('quotes.productValidationFailed', {
-              productName: err.product.node?.productName || '',
-            }),
-          );
-        } else {
-          snackbar.error(err.error.message);
-        }
-      });
+    const groupedErrors = groupBy(error, (err) =>
+      ['OOS', 'NON_PURCHASABLE', 'NETWORK_ERROR'].includes(err.error.errorCode)
+        ? err.error.errorCode
+        : 'OTHER',
+    );
 
-      const validProducts = [...success, ...warning].map((product) => product.product);
+    if (groupedErrors.OOS?.length > 0) {
+      const productNames = groupedErrors.OOS.map((err) => err.product.node?.productName || '');
 
-      addQuoteDraftProducts(validProducts);
-
-      return validProducts.length > 0;
+      snackbar.error(
+        b3Lang('purchasedProducts.quickAdd.insufficientStockSku', {
+          stockSku: productNames.join(', '),
+        }),
+      );
     }
 
+    if (groupedErrors.NON_PURCHASABLE?.length > 0) {
+      const productNames = groupedErrors.NON_PURCHASABLE.map(
+        (err) => err.product.node?.productName || '',
+      );
+
+      snackbar.error(
+        b3Lang('purchasedProducts.quickAdd.notPurchaseableSku', {
+          notPurchaseSku: productNames.join(', '),
+        }),
+      );
+    }
+
+    if (groupedErrors.OTHER?.length > 0) {
+      const productNames = groupedErrors.OTHER.map((err) => err.product.node?.productName || '');
+
+      snackbar.error(
+        b3Lang('quotes.productValidationFailed', {
+          productName: productNames.join(', '),
+        }),
+      );
+    }
+
+    if (groupedErrors.NETWORK_ERROR?.length > 0) {
+      const productNames = groupedErrors.NETWORK_ERROR.map(
+        (err) => err.product.node?.productName || '',
+      );
+
+      snackbar.error(
+        b3Lang('quotes.productValidationFailed', {
+          productName: productNames.join(', '),
+        }),
+      );
+    }
+
+    const validProducts = [...success, ...warning].map((product) => product.product);
+
+    addQuoteDraftProducts(validProducts);
+
+    return validProducts.length > 0;
+  };
+
+  const addToQuoteFrontend = (products: CustomFieldItems[]) => {
     addQuoteDraftProducts(products);
 
     return true;
   };
+  const addToQuote = isBackorderEnabled ? addToQuoteBackend : addToQuoteFrontend;
 
   const handleAddSelectedToQuote = async () => {
     setIsRequestLoading(true);

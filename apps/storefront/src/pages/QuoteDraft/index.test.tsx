@@ -320,10 +320,26 @@ const buildVariantInfoResponseWith = builder<VariantInfoResponse>(() => ({
   },
 }));
 
-const buildValidateProductWith = builder<ValidateProduct>(() => ({
-  responseType: faker.helpers.arrayElement(['ERROR', 'WARNING', 'SUCCESS']),
-  message: faker.lorem.sentence(),
-}));
+const buildValidateProductWith = builder<ValidateProduct>(() =>
+  faker.helpers.arrayElement([
+    {
+      responseType: 'SUCCESS',
+      message: faker.lorem.sentence(),
+    },
+    {
+      responseType: 'WARNING',
+      message: faker.lorem.sentence(),
+    },
+    {
+      responseType: 'ERROR',
+      message: faker.lorem.sentence(),
+      errorCode: faker.helpers.arrayElement(['NON_PURCHASABLE', 'OOS', 'INVALID_FIELDS', 'OTHER']),
+      product: {
+        availableToSell: faker.number.int(),
+      },
+    },
+  ]),
+);
 
 const buildCSVProductWith = builder(() => ({
   id: faker.string.uuid(),
@@ -1127,6 +1143,59 @@ describe('when the user is a B2B customer', () => {
     expect(await screen.findByText('Product was added to your quote.')).toBeInTheDocument();
   });
 
+  describe('when opening the "Add to quote" panel', () => {
+    it('shows 3 rows in the quick add', async () => {
+      const quoteInfo = buildQuoteInfoStateWith({
+        draftQuoteInfo: {
+          contactInfo: { email: customerEmail },
+          billingAddress: noAddress,
+          shippingAddress: noAddress,
+        },
+      });
+
+      renderWithProviders(<QuoteDraft setOpenPage={vi.fn()} />, {
+        preloadedState: { ...preloadedState, quoteInfo },
+      });
+
+      await userEvent.click(screen.getByText('Add to quote'));
+
+      const quickAddProducts = screen.getAllByLabelText('SKU#');
+
+      expect(quickAddProducts).toHaveLength(3);
+
+      const quantityProducts = screen.getAllByLabelText('Qty');
+
+      expect(quantityProducts).toHaveLength(3);
+    });
+
+    describe('when "show more rows" is clicked', () => {
+      it('shows 3 more rows in the quick add', async () => {
+        const quoteInfo = buildQuoteInfoStateWith({
+          draftQuoteInfo: {
+            contactInfo: { email: customerEmail },
+            billingAddress: noAddress,
+            shippingAddress: noAddress,
+          },
+        });
+
+        renderWithProviders(<QuoteDraft setOpenPage={vi.fn()} />, {
+          preloadedState: { ...preloadedState, quoteInfo },
+        });
+
+        await userEvent.click(screen.getByText('Add to quote'));
+        await userEvent.click(screen.getByRole('button', { name: 'Show more rows' }));
+
+        const quickAddProducts = screen.getAllByLabelText('SKU#');
+
+        expect(quickAddProducts).toHaveLength(6);
+
+        const quantityProducts = screen.getAllByLabelText('Qty');
+
+        expect(quantityProducts).toHaveLength(6);
+      });
+    });
+  });
+
   it('add product by sku to draft quote', async () => {
     const searchProducts = vi.fn<(...arg: unknown[]) => SearchProductsResponse>();
 
@@ -1219,9 +1288,9 @@ describe('when the user is a B2B customer', () => {
     });
 
     await userEvent.click(screen.getByText('Add to quote'));
-    const quickAddProduct = screen.getByLabelText('SKU#');
+    const quickAddProduct = screen.getAllByLabelText('SKU#')[0];
     await userEvent.type(quickAddProduct, 'LC-123');
-    const quantityProduct = screen.getByLabelText('Qty');
+    const quantityProduct = screen.getAllByLabelText('Qty')[0];
     await userEvent.type(quantityProduct, '1');
     await userEvent.click(screen.getByRole('button', { name: 'Add products to Quote' }));
 
@@ -1269,6 +1338,7 @@ describe('when the user is a B2B customer', () => {
         quoteInfo,
         global: buildGlobalStateWith({
           blockPendingQuoteNonPurchasableOOS: { isEnableProduct: false },
+          backorderEnabled: false,
         }),
       },
     });
@@ -1313,9 +1383,7 @@ describe('when the user is a B2B customer', () => {
         quoteInfo,
         global: buildGlobalStateWith({
           blockPendingQuoteNonPurchasableOOS: { isEnableProduct: false },
-          featureFlags: {
-            'B2B-3318.move_stock_and_backorder_validation_to_backend': false,
-          },
+          backorderEnabled: false,
         }),
       },
     });
@@ -1327,9 +1395,7 @@ describe('when the user is a B2B customer', () => {
   });
 
   describe('when the backordering feature flag is enabled', () => {
-    const featureFlags = {
-      'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
-    };
+    const backorderEnabled = true;
 
     describe('when product-level inventory tracking is enabled', () => {
       it('shows TBD as price when quantity exceeds available to sell', async () => {
@@ -1368,7 +1434,7 @@ describe('when the user is a B2B customer', () => {
             quoteInfo,
             global: buildGlobalStateWith({
               blockPendingQuoteNonPurchasableOOS: { isEnableProduct: true },
-              featureFlags,
+              backorderEnabled,
             }),
           },
         });
@@ -1414,7 +1480,7 @@ describe('when the user is a B2B customer', () => {
             quoteInfo,
             global: buildGlobalStateWith({
               blockPendingQuoteNonPurchasableOOS: { isEnableProduct: true },
-              featureFlags,
+              backorderEnabled,
             }),
           },
         });
@@ -1460,7 +1526,7 @@ describe('when the user is a B2B customer', () => {
             quoteInfo,
             global: buildGlobalStateWith({
               blockPendingQuoteNonPurchasableOOS: { isEnableProduct: true },
-              featureFlags,
+              backorderEnabled,
             }),
           },
         });
@@ -1514,15 +1580,16 @@ describe('when the user is a B2B customer', () => {
             quoteInfo,
             global: buildGlobalStateWith({
               blockPendingQuoteNonPurchasableOOS: { isEnableProduct: false },
-              featureFlags,
+              backorderEnabled,
             }),
           },
         });
 
         const productTable = await screen.findByRole('table');
 
-        expect(within(productTable).getByText('Insufficient stock')).toBeInTheDocument();
-        expect(within(productTable).getByText('In stock: 5')).toBeInTheDocument();
+        expect(
+          within(productTable).getByText('Insufficient stock, only 5 available'),
+        ).toBeInTheDocument();
       });
 
       it('does not show stock warning when quantity is less than available to sell', async () => {
@@ -1569,7 +1636,7 @@ describe('when the user is a B2B customer', () => {
             quoteInfo,
             global: buildGlobalStateWith({
               blockPendingQuoteNonPurchasableOOS: { isEnableProduct: false },
-              featureFlags,
+              backorderEnabled,
             }),
           },
         });
@@ -1623,7 +1690,7 @@ describe('when the user is a B2B customer', () => {
             quoteInfo,
             global: buildGlobalStateWith({
               blockPendingQuoteNonPurchasableOOS: { isEnableProduct: false },
-              featureFlags,
+              backorderEnabled,
             }),
           },
         });
@@ -1671,7 +1738,7 @@ describe('when the user is a B2B customer', () => {
             quoteInfo,
             global: buildGlobalStateWith({
               blockPendingQuoteNonPurchasableOOS: { isEnableProduct: true },
-              featureFlags,
+              backorderEnabled,
             }),
           },
         });
@@ -1717,7 +1784,7 @@ describe('when the user is a B2B customer', () => {
             quoteInfo,
             global: buildGlobalStateWith({
               blockPendingQuoteNonPurchasableOOS: { isEnableProduct: true },
-              featureFlags,
+              backorderEnabled,
             }),
           },
         });
@@ -1763,7 +1830,7 @@ describe('when the user is a B2B customer', () => {
             quoteInfo,
             global: buildGlobalStateWith({
               blockPendingQuoteNonPurchasableOOS: { isEnableProduct: true },
-              featureFlags,
+              backorderEnabled,
             }),
           },
         });
@@ -1820,15 +1887,16 @@ describe('when the user is a B2B customer', () => {
             quoteInfo,
             global: buildGlobalStateWith({
               blockPendingQuoteNonPurchasableOOS: { isEnableProduct: false },
-              featureFlags,
+              backorderEnabled,
             }),
           },
         });
 
         const productTable = await screen.findByRole('table');
 
-        expect(within(productTable).getByText('Insufficient stock')).toBeInTheDocument();
-        expect(within(productTable).getByText('In stock: 5')).toBeInTheDocument();
+        expect(
+          within(productTable).getByText('Insufficient stock, only 5 available'),
+        ).toBeInTheDocument();
       });
 
       it('does not show stock warning when quantity is less than available to sell', async () => {
@@ -1878,7 +1946,7 @@ describe('when the user is a B2B customer', () => {
             quoteInfo,
             global: buildGlobalStateWith({
               blockPendingQuoteNonPurchasableOOS: { isEnableProduct: false },
-              featureFlags,
+              backorderEnabled,
             }),
           },
         });
@@ -1923,7 +1991,7 @@ describe('when the user is a B2B customer', () => {
             quoteInfo,
             global: buildGlobalStateWith({
               blockPendingQuoteNonPurchasableOOS: { isEnableProduct: false },
-              featureFlags,
+              backorderEnabled,
             }),
           },
         });
@@ -2009,9 +2077,7 @@ describe('when the user is a B2B customer', () => {
           quoteInfo,
           global: buildGlobalStateWith({
             blockPendingQuoteNonPurchasableOOS: { isEnableProduct: false },
-            featureFlags: {
-              'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
-            },
+            backorderEnabled: true,
             quoteSubmissionResponse: {
               value: '0',
             },
@@ -2088,6 +2154,119 @@ describe('when the user is a B2B customer', () => {
       expect(navigation).toHaveBeenCalledWith('/quoteDetail/123?date=1245');
     });
 
+    it('navigates correctly when quote submission response dialog is shown and then closed', async () => {
+      set(window, 'b2b.callbacks.dispatchEvent', vi.fn().mockReturnValue(true));
+      const quote = buildQuoteWith({ data: { quote: { id: '272989', quoteNumber: '911911' } } });
+
+      const state = { stateName: 'Jalisco', stateCode: 'JL' };
+      const country = { id: '123', countryName: 'Mexico', countryCode: 'MX', states: [state] };
+
+      server.use(
+        graphql.query('Countries', () => HttpResponse.json({ data: { countries: [country] } })),
+        graphql.query('Addresses', () =>
+          HttpResponse.json({ data: { addresses: { totalCount: 0, edges: [] } } }),
+        ),
+        graphql.query('getQuoteExtraFields', () =>
+          HttpResponse.json({ data: { quoteExtraFieldsConfig: [] } }),
+        ),
+      );
+
+      const companyInfo = buildCompanyStateWith({
+        companyInfo: { status: CompanyStatus.APPROVED },
+        customer: {
+          userType: UserTypes.MULTIPLE_B2C,
+          role: CustomerRole.SENIOR_BUYER,
+          emailAddress: customerEmail,
+        },
+        permissions: [
+          {
+            code: 'create_quote',
+            permissionLevel: 2,
+          },
+        ],
+      });
+
+      const product = buildDraftQuoteItemWith({
+        node: {
+          primaryImage: 'url',
+          quantity: 100,
+          variantSku: 'test',
+          basePrice: 10,
+          taxPrice: 5,
+          productName: 'Unbranded Rubber Cheese',
+          productsSearch: buildProductWith({
+            inventoryLevel: 10,
+            inventoryTracking: 'product',
+            sku: 'test',
+            basePrice: '10.00',
+            offeredPrice: '10.00',
+            productId: 1,
+            imageUrl: 'url',
+            id: 4451490883947128,
+          }),
+        },
+      });
+
+      const quoteInfo = buildQuoteInfoStateWith({
+        draftQuoteInfo: {
+          contactInfo: { email: customerEmail },
+          billingAddress: noAddress,
+          shippingAddress: noAddress,
+          referenceNumber: '123',
+          note: 'meow',
+        },
+        draftQuoteList: [product],
+      });
+
+      const { navigation } = renderWithProviders(<QuoteDraft setOpenPage={vi.fn()} />, {
+        preloadedState: {
+          company: companyInfo,
+          storeInfo: storeInfoWithDateFormat,
+          quoteInfo,
+          global: buildGlobalStateWith({
+            blockPendingQuoteNonPurchasableOOS: { isEnableProduct: false },
+            backorderEnabled: true,
+            quoteSubmissionResponse: {
+              value: '1', // Show the submission response dialog
+              key: 'test-key',
+              message: 'Your quote has been submitted successfully!',
+              title: 'Quote Submission Successful',
+            },
+          }),
+        },
+      });
+
+      server.use(
+        graphql.mutation('CreateQuote', () =>
+          HttpResponse.json(
+            buildQuoteCreateResponseWith({
+              data: {
+                quoteCreate: { quote: { id: 123, createdAt: '1245', uuid: 'test-uuid-1234' } },
+              },
+            }),
+          ),
+        ),
+        graphql.mutation('DeleteCart', () =>
+          HttpResponse.json({ data: { cart: { deleteCart: { deletedCartEntityId: '12345' } } } }),
+        ),
+        graphql.query('GetQuoteInfoB2B', () => HttpResponse.json(quote)),
+        graphql.query('SearchProducts', () => HttpResponse.json({ data: { productsSearch: [] } })),
+      );
+
+      await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+      await userEvent.click(await screen.findByRole('button', { name: /Submit/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText('Quote Submission Successful')).toBeInTheDocument();
+      });
+
+      const okButton = screen.getByRole('button', { name: 'OK' });
+      await userEvent.click(okButton);
+
+      expect(navigation).toHaveBeenCalledWith('/quoteDetail/123?date=1245&uuid=test-uuid-1234');
+    });
+
     it('renders snackbar error if mutation throws product validation erros', async () => {
       set(window, 'b2b.callbacks.dispatchEvent', vi.fn().mockReturnValue(true));
       const getVariantInfoOOSAndPurchase = vi.fn();
@@ -2160,9 +2339,7 @@ describe('when the user is a B2B customer', () => {
           quoteInfo,
           global: buildGlobalStateWith({
             blockPendingQuoteNonPurchasableOOS: { isEnableProduct: false },
-            featureFlags: {
-              'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
-            },
+            backorderEnabled: true,
             quoteSubmissionResponse: {
               value: '0',
             },
@@ -2282,7 +2459,7 @@ describe('when the user is a B2B customer', () => {
                   sku: 'LC-123',
                   optionsV3: [],
                   isPriceHidden: false,
-                  orderQuantityMinimum: 0,
+                  orderQuantityMinimum: 5,
                   orderQuantityMaximum: 0,
                   inventoryLevel: 100,
                   variants: [variant],
@@ -2358,7 +2535,7 @@ describe('when the user is a B2B customer', () => {
             quoteInfo,
             global: buildGlobalStateWith({
               blockPendingQuoteNonPurchasableOOS: { isEnableProduct: false },
-              featureFlags,
+              backorderEnabled,
             }),
           },
         });
@@ -2378,6 +2555,125 @@ describe('when the user is a B2B customer', () => {
       });
 
       it('adds product successfully when validateProduct returns a warning', async () => {
+        const searchProducts = vi.fn<(...arg: unknown[]) => SearchProductsResponse>();
+
+        const variant = buildVariantWith({
+          purchasing_disabled: false,
+          bc_calculated_price: {
+            tax_exclusive: 123,
+          },
+        });
+
+        when(searchProducts)
+          .calledWith(stringContainingAll('search: "Laugh Canister"', 'currencyCode: "USD"'))
+          .thenReturn({
+            data: {
+              productsSearch: [
+                buildSearchProductWith({
+                  id: variant.product_id,
+                  name: 'Laugh Canister',
+                  sku: 'LC-123',
+                  optionsV3: [],
+                  isPriceHidden: false,
+                  orderQuantityMinimum: 5,
+                  orderQuantityMaximum: 0,
+                  inventoryLevel: 100,
+                  variants: [variant],
+                }),
+              ],
+            },
+          });
+
+        const getPriceProducts = vi.fn<(...arg: unknown[]) => PriceProductsResponse>();
+
+        when(getPriceProducts)
+          .calledWith({
+            storeHash: 'store-hash',
+            channelId: 1,
+            currencyCode: 'USD',
+            items: [{ productId: variant.product_id, variantId: variant.variant_id, options: [] }],
+            customerGroupId: 0,
+          })
+          .thenReturn({
+            data: {
+              priceProducts: [buildProductPriceWith('WHATEVER_VALUES')],
+            },
+          });
+
+        const validateProduct = vi.fn<(...arg: unknown[]) => ValidateProductResponse>();
+
+        when(validateProduct)
+          .calledWith(
+            expect.objectContaining({
+              productId: variant.product_id,
+              variantId: variant.variant_id,
+              quantity: 1,
+              productOptions: [],
+            }),
+          )
+          .thenReturn({
+            data: {
+              validateProduct: buildValidateProductWith({
+                responseType: 'WARNING',
+                message: 'You need to purchase a minimum of 5 of the LC-123 per order',
+              }),
+            },
+          });
+
+        server.use(
+          graphql.query('Countries', () =>
+            HttpResponse.json({ data: { countries: [fakeCountry] } }),
+          ),
+          graphql.query('Addresses', () =>
+            HttpResponse.json({ data: { addresses: { totalCount: 0, edges: [] } } }),
+          ),
+          graphql.query('getQuoteExtraFields', () =>
+            HttpResponse.json({ data: { quoteExtraFieldsConfig: [] } }),
+          ),
+          graphql.query('SearchProducts', ({ query }) => HttpResponse.json(searchProducts(query))),
+          graphql.query('priceProducts', ({ variables }) =>
+            HttpResponse.json(getPriceProducts(variables)),
+          ),
+          graphql.query('ValidateProduct', ({ variables }) =>
+            HttpResponse.json(validateProduct(variables)),
+          ),
+        );
+
+        const quoteInfo = buildQuoteInfoStateWith({
+          draftQuoteInfo: {
+            // email is checked on save and must match the company.customer in state for the save to succeed
+            contactInfo: { email: customerEmail },
+            billingAddress: noAddress,
+            shippingAddress: noAddress,
+          },
+        });
+
+        renderWithProviders(<QuoteDraft setOpenPage={vi.fn()} />, {
+          preloadedState: {
+            ...preloadedState,
+            quoteInfo,
+            global: buildGlobalStateWith({
+              blockPendingQuoteNonPurchasableOOS: { isEnableProduct: false },
+              backorderEnabled,
+            }),
+          },
+        });
+
+        await userEvent.click(screen.getByText('Add to quote'));
+        const searchProduct = screen.getByPlaceholderText('Search products');
+        await userEvent.type(searchProduct, 'Laugh Canister');
+        await userEvent.click(screen.getByRole('button', { name: 'Search product' }));
+        const dialog = await screen.findByRole('dialog');
+
+        const addToQuote = within(dialog).getByRole('button', { name: 'Add to quote' });
+
+        await userEvent.click(addToQuote);
+
+        expect(validateProduct).toHaveBeenCalled();
+        expect(await screen.findByText('Product was added to your quote.')).toBeInTheDocument();
+      });
+
+      it('adds product when threshold error occurs and NP/OOS flag is enabled', async () => {
         const searchProducts = vi.fn<(...arg: unknown[]) => SearchProductsResponse>();
 
         const variant = buildVariantWith({
@@ -2437,8 +2733,135 @@ describe('when the user is a B2B customer', () => {
           .thenReturn({
             data: {
               validateProduct: buildValidateProductWith({
-                responseType: 'WARNING',
-                message: 'validation warning',
+                responseType: 'ERROR',
+                message: 'You need to purchase a minimum of 5 of the LC-123 per order.',
+                errorCode: 'OTHER',
+                product: {
+                  availableToSell: 0,
+                },
+              }),
+            },
+          });
+
+        server.use(
+          graphql.query('Countries', () =>
+            HttpResponse.json({ data: { countries: [fakeCountry] } }),
+          ),
+          graphql.query('Addresses', () =>
+            HttpResponse.json({ data: { addresses: { totalCount: 0, edges: [] } } }),
+          ),
+          graphql.query('getQuoteExtraFields', () =>
+            HttpResponse.json({ data: { quoteExtraFieldsConfig: [] } }),
+          ),
+          graphql.query('SearchProducts', ({ query }) => HttpResponse.json(searchProducts(query))),
+          graphql.query('priceProducts', ({ variables }) =>
+            HttpResponse.json(getPriceProducts(variables)),
+          ),
+          graphql.query('ValidateProduct', ({ variables }) =>
+            HttpResponse.json(validateProduct(variables)),
+          ),
+        );
+
+        const quoteInfo = buildQuoteInfoStateWith({
+          draftQuoteInfo: {
+            // email is checked on save and must match the company.customer in state for the save to succeed
+            contactInfo: { email: customerEmail },
+            billingAddress: noAddress,
+            shippingAddress: noAddress,
+          },
+        });
+
+        renderWithProviders(<QuoteDraft setOpenPage={vi.fn()} />, {
+          preloadedState: {
+            ...preloadedState,
+            quoteInfo,
+            global: buildGlobalStateWith({
+              blockPendingQuoteNonPurchasableOOS: { isEnableProduct: true },
+              backorderEnabled,
+            }),
+          },
+        });
+
+        await userEvent.click(screen.getByText('Add to quote'));
+        const searchProduct = screen.getByPlaceholderText('Search products');
+        await userEvent.type(searchProduct, 'Laugh Canister');
+        await userEvent.click(screen.getByRole('button', { name: 'Search product' }));
+        const dialog = await screen.findByRole('dialog');
+
+        const addToQuote = within(dialog).getByRole('button', { name: 'Add to quote' });
+
+        await userEvent.click(addToQuote);
+
+        expect(validateProduct).toHaveBeenCalled();
+        expect(await screen.findByText('Product was added to your quote.')).toBeInTheDocument();
+      });
+
+      it('adds product when threshold error occurs and NP/OOS flag is disabled', async () => {
+        const searchProducts = vi.fn<(...arg: unknown[]) => SearchProductsResponse>();
+
+        const variant = buildVariantWith({
+          purchasing_disabled: false,
+          bc_calculated_price: {
+            tax_exclusive: 123,
+          },
+        });
+
+        when(searchProducts)
+          .calledWith(stringContainingAll('search: "Laugh Canister"', 'currencyCode: "USD"'))
+          .thenReturn({
+            data: {
+              productsSearch: [
+                buildSearchProductWith({
+                  id: variant.product_id,
+                  name: 'Laugh Canister',
+                  sku: 'LC-123',
+                  optionsV3: [],
+                  isPriceHidden: false,
+                  orderQuantityMinimum: 0,
+                  orderQuantityMaximum: 0,
+                  inventoryLevel: 100,
+                  variants: [variant],
+                }),
+              ],
+            },
+          });
+
+        const getPriceProducts = vi.fn<(...arg: unknown[]) => PriceProductsResponse>();
+
+        when(getPriceProducts)
+          .calledWith({
+            storeHash: 'store-hash',
+            channelId: 1,
+            currencyCode: 'USD',
+            items: [{ productId: variant.product_id, variantId: variant.variant_id, options: [] }],
+            customerGroupId: 0,
+          })
+          .thenReturn({
+            data: {
+              priceProducts: [buildProductPriceWith('WHATEVER_VALUES')],
+            },
+          });
+
+        const validateProduct = vi.fn<(...arg: unknown[]) => ValidateProductResponse>();
+
+        when(validateProduct)
+          .calledWith(
+            expect.objectContaining({
+              productId: variant.product_id,
+              variantId: variant.variant_id,
+              quantity: 1,
+              productOptions: [],
+            }),
+          )
+          .thenReturn({
+            data: {
+              validateProduct: buildValidateProductWith({
+                responseType: 'ERROR',
+                message: 'You need to purchase a minimum of 5 of the LC-123 per order.',
+                errorCode: 'OTHER',
+                product: {
+                  availableToSell: 0,
+                },
               }),
             },
           });
@@ -2477,7 +2900,7 @@ describe('when the user is a B2B customer', () => {
             quoteInfo,
             global: buildGlobalStateWith({
               blockPendingQuoteNonPurchasableOOS: { isEnableProduct: false },
-              featureFlags,
+              backorderEnabled,
             }),
           },
         });
@@ -2558,6 +2981,10 @@ describe('when the user is a B2B customer', () => {
               validateProduct: buildValidateProductWith({
                 responseType: 'ERROR',
                 message: 'validation error',
+                product: {
+                  availableToSell: faker.number.int(),
+                },
+                errorCode: 'INVALID_FIELDS',
               }),
             },
           });
@@ -2596,7 +3023,7 @@ describe('when the user is a B2B customer', () => {
             quoteInfo,
             global: buildGlobalStateWith({
               blockPendingQuoteNonPurchasableOOS: { isEnableProduct: false },
-              featureFlags,
+              backorderEnabled,
             }),
           },
         });
@@ -2612,11 +3039,11 @@ describe('when the user is a B2B customer', () => {
         await userEvent.click(addToQuote);
 
         expect(validateProduct).toHaveBeenCalled();
-        expect(await screen.findByText('validation error')).toBeInTheDocument();
+        expect(await screen.findByText(/Product validation failed for/)).toBeInTheDocument();
         expect(screen.queryByText('Product was added to your quote.')).not.toBeInTheDocument();
       });
 
-      it('adds product successfully and does not call validateProduct when NP&OOS setting is enabled', async () => {
+      it('adds product successfully and calls validateProduct when NP&OOS setting is enabled', async () => {
         const searchProducts = vi.fn<(...arg: unknown[]) => SearchProductsResponse>();
 
         const variant = buildVariantWith({
@@ -2703,7 +3130,7 @@ describe('when the user is a B2B customer', () => {
             quoteInfo,
             global: buildGlobalStateWith({
               blockPendingQuoteNonPurchasableOOS: { isEnableProduct: true },
-              featureFlags,
+              backorderEnabled,
             }),
           },
         });
@@ -2718,7 +3145,7 @@ describe('when the user is a B2B customer', () => {
 
         await userEvent.click(addToQuote);
 
-        expect(validateProduct).not.toHaveBeenCalled();
+        expect(validateProduct).toHaveBeenCalled();
         expect(await screen.findByText('Product was added to your quote.')).toBeInTheDocument();
       });
     });
@@ -2842,15 +3269,15 @@ describe('when the user is a B2B customer', () => {
             quoteInfo,
             global: buildGlobalStateWith({
               blockPendingQuoteNonPurchasableOOS: { isEnableProduct: false },
-              featureFlags,
+              backorderEnabled,
             }),
           },
         });
 
         await userEvent.click(screen.getByText('Add to quote'));
-        const quickAddProduct = screen.getByLabelText('SKU#');
+        const quickAddProduct = screen.getAllByLabelText('SKU#')[0];
         await userEvent.type(quickAddProduct, 'LC-123');
-        const quantityProduct = screen.getByLabelText('Qty');
+        const quantityProduct = screen.getAllByLabelText('Qty')[0];
         await userEvent.type(quantityProduct, '1');
         await userEvent.click(screen.getByRole('button', { name: 'Add products to Quote' }));
 
@@ -2976,15 +3403,15 @@ describe('when the user is a B2B customer', () => {
             quoteInfo,
             global: buildGlobalStateWith({
               blockPendingQuoteNonPurchasableOOS: { isEnableProduct: false },
-              featureFlags,
+              backorderEnabled,
             }),
           },
         });
 
         await userEvent.click(screen.getByText('Add to quote'));
-        const quickAddProduct = screen.getByLabelText('SKU#');
+        const quickAddProduct = screen.getAllByLabelText('SKU#')[0];
         await userEvent.type(quickAddProduct, 'LC-123');
-        const quantityProduct = screen.getByLabelText('Qty');
+        const quantityProduct = screen.getAllByLabelText('Qty')[0];
         await userEvent.type(quantityProduct, '1');
         await userEvent.click(screen.getByRole('button', { name: 'Add products to Quote' }));
 
@@ -3070,6 +3497,10 @@ describe('when the user is a B2B customer', () => {
               validateProduct: buildValidateProductWith({
                 responseType: 'ERROR',
                 message: 'validation error',
+                product: {
+                  availableToSell: faker.number.int(),
+                },
+                errorCode: 'INVALID_FIELDS',
               }),
             },
           });
@@ -3110,24 +3541,24 @@ describe('when the user is a B2B customer', () => {
             quoteInfo,
             global: buildGlobalStateWith({
               blockPendingQuoteNonPurchasableOOS: { isEnableProduct: false },
-              featureFlags,
+              backorderEnabled,
             }),
           },
         });
 
         await userEvent.click(screen.getByText('Add to quote'));
-        const quickAddProduct = screen.getByLabelText('SKU#');
+        const quickAddProduct = screen.getAllByLabelText('SKU#')[0];
         await userEvent.type(quickAddProduct, 'LC-123');
-        const quantityProduct = screen.getByLabelText('Qty');
+        const quantityProduct = screen.getAllByLabelText('Qty')[0];
         await userEvent.type(quantityProduct, '1');
         await userEvent.click(screen.getByRole('button', { name: 'Add products to Quote' }));
 
         expect(validateProduct).toHaveBeenCalled();
-        expect(await screen.findByText('validation error')).toBeInTheDocument();
+        expect(await screen.findByText(/Product validation failed for/)).toBeInTheDocument();
         expect(screen.queryByText('Products were added to your quote.')).not.toBeInTheDocument();
       });
 
-      it('adds product successfully and does not call validateProduct when NP&OOS setting is enabled', async () => {
+      it('adds product successfully and calls validateProduct when NP&OOS setting is enabled', async () => {
         const searchProducts = vi.fn<(...arg: unknown[]) => SearchProductsResponse>();
 
         const variant = buildVariantWith({
@@ -3236,19 +3667,19 @@ describe('when the user is a B2B customer', () => {
             quoteInfo,
             global: buildGlobalStateWith({
               blockPendingQuoteNonPurchasableOOS: { isEnableProduct: true },
-              featureFlags,
+              backorderEnabled,
             }),
           },
         });
 
         await userEvent.click(screen.getByText('Add to quote'));
-        const quickAddProduct = screen.getByLabelText('SKU#');
+        const quickAddProduct = screen.getAllByLabelText('SKU#')[0];
         await userEvent.type(quickAddProduct, 'LC-123');
-        const quantityProduct = screen.getByLabelText('Qty');
+        const quantityProduct = screen.getAllByLabelText('Qty')[0];
         await userEvent.type(quantityProduct, '1');
         await userEvent.click(screen.getByRole('button', { name: 'Add products to Quote' }));
 
-        expect(validateProduct).not.toHaveBeenCalled();
+        expect(validateProduct).toHaveBeenCalled();
         expect(await screen.findByText('Products were added to your quote.')).toBeInTheDocument();
       });
     });
@@ -3424,7 +3855,7 @@ describe('when the user is a B2B customer', () => {
             quoteInfo,
             global: buildGlobalStateWith({
               blockPendingQuoteNonPurchasableOOS: { isEnableProduct: false },
-              featureFlags,
+              backorderEnabled,
             }),
           },
         });
@@ -3628,7 +4059,7 @@ describe('when the user is a B2B customer', () => {
             quoteInfo,
             global: buildGlobalStateWith({
               blockPendingQuoteNonPurchasableOOS: { isEnableProduct: false },
-              featureFlags,
+              backorderEnabled,
             }),
           },
         });
@@ -3773,6 +4204,10 @@ describe('when the user is a B2B customer', () => {
               validateProduct: buildValidateProductWith({
                 responseType: 'ERROR',
                 message: 'validation error',
+                product: {
+                  availableToSell: faker.number.int(),
+                },
+                errorCode: 'INVALID_FIELDS',
               }),
             },
           });
@@ -3832,7 +4267,7 @@ describe('when the user is a B2B customer', () => {
             quoteInfo,
             global: buildGlobalStateWith({
               blockPendingQuoteNonPurchasableOOS: { isEnableProduct: false },
-              featureFlags,
+              backorderEnabled,
             }),
           },
         });
@@ -3860,11 +4295,11 @@ describe('when the user is a B2B customer', () => {
         await userEvent.click(addToListButton);
 
         expect(validateProduct).toHaveBeenCalledTimes(2);
-        expect(await screen.findAllByText('validation error')).toHaveLength(2);
+        expect(await screen.findAllByText(/Product validation failed for/)).toHaveLength(2);
         expect(screen.queryByText('Products were added to your quote.')).not.toBeInTheDocument();
       });
 
-      it('adds product successfully and does not call validateProduct when NP&OOS setting is enabled', async () => {
+      it('adds product successfully and calls validateProduct when NP&OOS setting is enabled', async () => {
         const csvProducts = [
           buildCSVProductWith({
             id: '73737',
@@ -4025,7 +4460,7 @@ describe('when the user is a B2B customer', () => {
             quoteInfo,
             global: buildGlobalStateWith({
               blockPendingQuoteNonPurchasableOOS: { isEnableProduct: true },
-              featureFlags,
+              backorderEnabled,
             }),
           },
         });
@@ -4052,7 +4487,7 @@ describe('when the user is a B2B customer', () => {
         const addToListButton = screen.getByRole('button', { name: /add to list/i });
         await userEvent.click(addToListButton);
 
-        expect(validateProduct).not.toHaveBeenCalled();
+        expect(validateProduct).toHaveBeenCalled();
         expect(await screen.findByText('Products were added to your quote.')).toBeInTheDocument();
       });
     });
@@ -4214,8 +4649,8 @@ describe('when the user is a B2B customer', () => {
           HttpResponse.json({ data: { quote: { id: '272989', quoteNumber: '911911' } } }),
         ),
         http.post('*/api/v2/extra-fields/quote/validate', () => HttpResponse.json({ code: 200 })),
-        graphql.mutation('CreateQuote', ({ query }) => {
-          createQuoteMutation(query);
+        graphql.mutation('CreateQuote', ({ variables }) => {
+          createQuoteMutation(JSON.stringify(variables.quoteData));
           return HttpResponse.json(
             buildQuoteCreateResponseWith({
               data: {
@@ -4370,6 +4805,116 @@ describe('when the user is a B2B customer', () => {
       expect(mutationData).not.toContain(BILLING_ADDRESS_ID);
       expect(mutationData).not.toContain(SHIPPING_ADDRESS_ID);
     });
+
+    it('should map company field from saved address to companyName field in form', async () => {
+      const savedAddressCompanyName = 'Acme Corporation Inc';
+      const savedAddressWithCompany = {
+        ...buildAddressWith({
+          country: country.countryCode,
+          state: state.stateName,
+        }),
+        id: BILLING_ADDRESS_ID,
+        company: savedAddressCompanyName,
+        isShipping: 0,
+        isBilling: 1,
+        isDefaultShipping: 0,
+        isDefaultBilling: 0,
+      };
+
+      server.use(
+        graphql.query('Addresses', () =>
+          HttpResponse.json({
+            data: {
+              addresses: {
+                totalCount: 1,
+                edges: [{ node: { ...savedAddressWithCompany } }],
+              },
+            },
+          }),
+        ),
+      );
+
+      renderWithProviders(<QuoteDraft setOpenPage={vi.fn()} />, getPreloadedState());
+
+      await userEvent.click(screen.getByRole('button', { name: 'Edit info' }));
+
+      const billingFields = screen.getByRole('group', { name: 'Billing' });
+      await userEvent.click(within(billingFields).getByText('Choose from saved'));
+
+      await waitFor(() =>
+        expect(screen.getByRole('heading', { name: 'Choose from saved' })).toBeVisible(),
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'Choose address' }));
+
+      await waitFor(() =>
+        expect(
+          within(billingFields).getByDisplayValue(savedAddressCompanyName),
+        ).toBeInTheDocument(),
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'Save info' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Submit' }));
+
+      await waitFor(() => expect(createQuoteMutation).toHaveBeenCalled());
+      const mutationData = createQuoteMutation.mock.calls[0][0];
+      expect(mutationData).toContain(`"companyName":"${savedAddressCompanyName}"`);
+    });
+
+    it('should map company field from saved shipping address to companyName field in form', async () => {
+      const savedAddressCompanyName = 'Shipping Company Ltd';
+      const savedShippingAddressWithCompany = {
+        ...buildAddressWith({
+          country: country.countryCode,
+          state: state.stateName,
+        }),
+        id: SHIPPING_ADDRESS_ID,
+        company: savedAddressCompanyName,
+        isShipping: 1,
+        isBilling: 0,
+        isDefaultShipping: 0,
+        isDefaultBilling: 0,
+      };
+
+      server.use(
+        graphql.query('Addresses', () =>
+          HttpResponse.json({
+            data: {
+              addresses: {
+                totalCount: 1,
+                edges: [{ node: { ...savedShippingAddressWithCompany } }],
+              },
+            },
+          }),
+        ),
+      );
+
+      renderWithProviders(<QuoteDraft setOpenPage={vi.fn()} />, getPreloadedState());
+
+      await userEvent.click(screen.getByRole('button', { name: 'Edit info' }));
+
+      const shippingFields = screen.getByRole('group', { name: 'Shipping' });
+      await userEvent.click(within(shippingFields).getByText('Choose from saved'));
+
+      await waitFor(() =>
+        expect(screen.getByRole('heading', { name: 'Choose from saved' })).toBeVisible(),
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'Choose address' }));
+
+      await waitFor(() =>
+        expect(
+          within(shippingFields).getByDisplayValue(savedAddressCompanyName),
+        ).toBeInTheDocument(),
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'Save info' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Submit' }));
+
+      await waitFor(() => expect(createQuoteMutation).toHaveBeenCalled());
+      const mutationData = createQuoteMutation.mock.calls[0][0];
+      expect(mutationData).toContain(`"companyName":"${savedAddressCompanyName}"`);
+    });
   });
 
   describe('when adding products to quote with Non-Purchasable & Out of Stock enabled', () => {
@@ -4443,6 +4988,16 @@ describe('when the user is a B2B customer', () => {
         graphql.query('GetVariantInfoBySkus', ({ query }) =>
           HttpResponse.json(getVariantInfoBySkus(query)),
         ),
+        graphql.query('ValidateProduct', () =>
+          HttpResponse.json({
+            data: {
+              validateProduct: buildValidateProductWith({
+                responseType: 'WARNING',
+                message: 'Product is not purchasable',
+              }),
+            },
+          }),
+        ),
       );
 
       const quoteInfo = buildQuoteInfoStateWith({
@@ -4459,24 +5014,22 @@ describe('when the user is a B2B customer', () => {
           quoteInfo,
           global: buildGlobalStateWith({
             blockPendingQuoteNonPurchasableOOS: { isEnableProduct: true },
-            featureFlags: {
-              'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
-            },
+            backorderEnabled: true,
           }),
         },
       });
 
       await userEvent.click(screen.getByText('Add to quote'));
-      const quickAddProduct = screen.getByLabelText('SKU#');
+      const quickAddProduct = screen.getAllByLabelText('SKU#')[0];
       await userEvent.type(quickAddProduct, 'LC-123');
-      const quantityProduct = screen.getByLabelText('Qty');
+      const quantityProduct = screen.getAllByLabelText('Qty')[0];
       await userEvent.type(quantityProduct, '1');
       await userEvent.click(screen.getByRole('button', { name: 'Add products to Quote' }));
 
       expect(await screen.findByText('Products were added to your quote.')).toBeInTheDocument();
     });
 
-    it('adds a product without enough stock and shows no warnings', async () => {
+    it('adds a product without enough stock and shows non-available inline error message for 0 available to sell', async () => {
       const searchProducts = vi.fn<(...arg: unknown[]) => SearchProductsResponse>();
 
       const variant = buildVariantWith({
@@ -4554,6 +5107,16 @@ describe('when the user is a B2B customer', () => {
         graphql.query('getQuoteExtraFields', () =>
           HttpResponse.json({ data: { quoteExtraFieldsConfig: [] } }),
         ),
+        graphql.query('ValidateProduct', () =>
+          HttpResponse.json({
+            data: {
+              validateProduct: buildValidateProductWith({
+                responseType: 'WARNING',
+                message: 'Product is out of stock',
+              }),
+            },
+          }),
+        ),
       );
 
       const quoteInfo = buildQuoteInfoStateWith({
@@ -4571,9 +5134,7 @@ describe('when the user is a B2B customer', () => {
           quoteInfo,
           global: buildGlobalStateWith({
             blockPendingQuoteNonPurchasableOOS: { isEnableProduct: true },
-            featureFlags: {
-              'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
-            },
+            backorderEnabled: true,
           }),
         },
       });
@@ -4582,8 +5143,8 @@ describe('when the user is a B2B customer', () => {
 
       await userEvent.click(screen.getByText('Add to quote'));
 
-      await userEvent.type(screen.getByLabelText('SKU#'), 'LC-123');
-      await userEvent.type(screen.getByLabelText('Qty'), '1');
+      await userEvent.type(screen.getAllByLabelText('SKU#')[0], 'LC-123');
+      await userEvent.type(screen.getAllByLabelText('Qty')[0], '1');
 
       await userEvent.click(screen.getByRole('button', { name: 'Add products to Quote' }));
 
@@ -4593,7 +5154,7 @@ describe('when the user is a B2B customer', () => {
 
       const cell = await screen.findByRole('cell', { name: /LC-123/ });
 
-      expect(within(cell).queryByText('Insufficient stock')).not.toBeInTheDocument();
+      expect(within(cell).getByText('Insufficient stock — none available')).toBeInTheDocument();
     });
   });
 });

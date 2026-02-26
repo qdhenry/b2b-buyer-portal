@@ -27,7 +27,7 @@ import { rolePermissionSelector, useAppSelector } from '@/store';
 import b2bGetVariantImageByVariantInfo from '@/utils/b2bGetVariantImageByVariantInfo';
 import { currencyFormat } from '@/utils/b3CurrencyFormat';
 import { getBCPrice, getDisplayPrice, getValidOptionsList } from '@/utils/b3Product/b3Product';
-import { getProductOptionsFields } from '@/utils/b3Product/shared/config';
+import { getProductOptionsFields, ProductsProps } from '@/utils/b3Product/shared/config';
 import { snackbar } from '@/utils/b3Tip';
 
 import B3FilterSearch from '../../../components/filter/B3FilterSearch';
@@ -73,7 +73,7 @@ interface ShoppingDetailTableProps {
   setIsRequestLoading: Dispatch<SetStateAction<boolean>>;
   shoppingListId: number | string;
   getShoppingListDetails: GetRequestList<SearchProps, CustomFieldItems>;
-  setCheckedArr: (values: CustomFieldItems) => void;
+  setCheckedArr: (values: ProductsProps[]) => void;
   isReadForApprove: boolean;
   isJuniorApprove: boolean;
   allowJuniorPlaceOrder: boolean;
@@ -82,7 +82,7 @@ interface ShoppingDetailTableProps {
   isB2BUser: boolean;
   productQuoteEnabled: boolean;
   isCanEditShoppingList: boolean;
-  role: number | string;
+  isJuniorBuyer: boolean;
 }
 
 interface SearchProps {
@@ -163,7 +163,7 @@ function ShoppingDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>)
     allowJuniorPlaceOrder,
     productQuoteEnabled,
     isCanEditShoppingList,
-    role,
+    isJuniorBuyer,
   } = props;
 
   const showInclusiveTaxPrice = useAppSelector(({ global }) => global.showInclusiveTaxPrice);
@@ -175,9 +175,7 @@ function ShoppingDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>)
     ? shoppingListCreateActionsPermission && isCanEditShoppingList
     : true;
   const b2bAndBcShoppingListActionsPermissions = isB2BUser ? canShoppingListActions : true;
-  const b2bSubmitShoppingListPermission = isB2BUser
-    ? submitShoppingListPermission
-    : Number(role) === 2;
+  const b2bSubmitShoppingListPermission = isB2BUser ? submitShoppingListPermission : isJuniorBuyer;
 
   const paginationTableRef = useRef<PaginationTableRefProps | null>(null);
 
@@ -342,10 +340,10 @@ function ShoppingDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>)
 
   const getSelectCheckbox = (selectCheckbox: Array<string | number>) => {
     if (selectCheckbox.length > 0) {
-      const productList = paginationTableRef.current?.getList() || [];
-      const checkedItems: CustomFieldItems[] = [];
-      selectCheckbox.forEach((item: number | string) => {
-        const newItems = productList.find((product: ListItemProps) => {
+      const productList: ProductsProps[] = paginationTableRef.current?.getList() || [];
+      const checkedItems: ProductsProps[] = [];
+      selectCheckbox.forEach((item) => {
+        const newItems = productList.find((product) => {
           const { node } = product;
 
           return node.id === item;

@@ -105,6 +105,30 @@ const validateProductQuery = `
     ) {
       responseType
       message
+      errorCode
+      product {
+        availableToSell
+      }
+    }
+  }
+`;
+
+const validateProductsQuery = `
+  query ValidateProducts ($products: [ValidateProductInputType]!) {
+    validateProducts(products: $products, storeHash: "${storeHash}", channelId: ${channelId}) {
+      isValid
+      products {
+        errorCode
+        responseType
+        message
+        product {
+          productId
+          variantId
+          sku
+          availableToSell
+          unlimitedBackorder
+        }
+      }
     }
   }
 `;
@@ -315,11 +339,70 @@ export interface SearchProductsResponse {
   };
 }
 
+/**
+ * Validation error codes returned by the product validation API.
+ * Used for typing API responses and for QUOTE_VALIDATION_ERROR_CODES (quote display).
+ */
+const PRODUCT_VALIDATION_ERROR_CODES = {
+  OOS: 'OOS',
+  NON_PURCHASABLE: 'NON_PURCHASABLE',
+  INVALID_FIELDS: 'INVALID_FIELDS',
+  OTHER: 'OTHER',
+} as const;
+
+export type ProductValidationErrorCode =
+  (typeof PRODUCT_VALIDATION_ERROR_CODES)[keyof typeof PRODUCT_VALIDATION_ERROR_CODES];
+
+/**
+ * Quote validation error codes: API codes plus NETWORK_ERROR (client-side).
+ * Re-exported from getQuoteValidationErrorMessage for consumers that need the full set.
+ */
+export const QUOTE_VALIDATION_ERROR_CODES = {
+  ...PRODUCT_VALIDATION_ERROR_CODES,
+  NETWORK_ERROR: 'NETWORK_ERROR',
+} as const;
+
+interface ValidateProductSuccess {
+  responseType: 'SUCCESS';
+  message: string;
+}
+
+interface ValidateProductError {
+  responseType: 'ERROR';
+  errorCode: ProductValidationErrorCode;
+  message: string;
+  product: {
+    availableToSell: number;
+  };
+}
+
+interface ValidateProductWarning {
+  responseType: 'WARNING';
+  message: string;
+}
+
 export interface ValidateProductResponse {
   data: {
-    validateProduct: {
-      responseType: 'ERROR' | 'WARNING' | 'SUCCESS';
-      message: string;
+    validateProduct: ValidateProductSuccess | ValidateProductWarning | ValidateProductError;
+  };
+}
+
+interface ValidateProductsResponse {
+  data: {
+    validateProducts: {
+      isValid: boolean;
+      products: {
+        errorCode: ProductValidationErrorCode;
+        responseType: 'SUCCESS' | 'WARNING' | 'ERROR';
+        message: string;
+        product: {
+          productId: number;
+          variantId: number;
+          sku: string;
+          availableToSell: number;
+          unlimitedBackorder: boolean;
+        };
+      }[];
     };
   };
 }
@@ -344,12 +427,22 @@ interface ValidateProductVariables {
     optionValue: string;
   }[];
 }
+interface ValidateProductsVariables {
+  products: ValidateProductVariables[];
+}
 
 export const validateProduct = (data: ValidateProductVariables) => {
   return B3Request.graphqlB2B<ValidateProductResponse>({
     query: validateProductQuery,
     variables: data,
   }).then((res) => res.validateProduct);
+};
+
+export const validateProducts = (data: ValidateProductsVariables) => {
+  return B3Request.graphqlB2B<ValidateProductsResponse>({
+    query: validateProductsQuery,
+    variables: data,
+  }).then((res) => res.validateProducts);
 };
 
 export const B2BProductsBulkUploadCSV = (data: CustomFieldItems = {}) =>
