@@ -3,7 +3,13 @@ import { ReactNode, useContext, useLayoutEffect } from 'react';
 import { Z_INDEX } from '@/constants';
 import { GlobalContext } from '@/shared/global';
 import { getBCStoreChannelId } from '@/shared/service/b2b';
-import { getGlobalTranslations, setStoreInfo, setTimeFormat, useAppDispatch } from '@/store';
+import {
+  getGlobalTranslations,
+  setBackorderEnabled,
+  setStoreInfo,
+  setTimeFormat,
+  useAppDispatch,
+} from '@/store';
 
 import { B3PageMask, usePageMask } from './loading';
 
@@ -12,6 +18,7 @@ interface B3StoreContainerProps {
 }
 
 type ZIndexType = keyof typeof Z_INDEX;
+
 const setZIndexVariables = () => {
   Object.keys(Z_INDEX).forEach((key) => {
     const zIndexKey = key as ZIndexType;
@@ -42,8 +49,8 @@ export default function B3StoreContainer(props: B3StoreContainerProps) {
         const [storeInfo] = storeBasicInfo.storeSites;
 
         if (!storeInfo) return;
-
         storeDispatch(setStoreInfo(storeInfo));
+        storeDispatch(setBackorderEnabled(storeBasicInfo.backorderEnabled ?? false));
 
         const {
           channelId,

@@ -1,9 +1,5 @@
 export const featureFlags = [
   {
-    key: 'B2B-3318.move_stock_and_backorder_validation_to_backend',
-    name: 'moveStockAndBackorderValidationToBackend',
-  },
-  {
     key: 'B2B-3817.disable_masquerading_cleanup_on_login',
     name: 'disableMasqueradingCleanupOnLogin',
   },
@@ -18,6 +14,10 @@ export const featureFlags = [
   {
     key: 'B2B-3978.pass_with_modifiers_to_product_upload',
     name: 'passWithModifiersToProductUpload',
+  },
+  {
+    key: 'B2B-4231.chunk_product_searches_in_csv_upload',
+    name: 'chunkProductSearchesInCsvUpload',
   },
 ] as const;
 

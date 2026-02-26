@@ -1,9 +1,11 @@
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Box, Grid, useTheme } from '@mui/material';
+import { v1 as uuid } from 'uuid';
 
 import B3Spin from '@/components/spin/B3Spin';
-import { useFeatureFlags } from '@/hooks/useFeatureFlags';
+import { CART_URL, CHECKOUT_URL, PRODUCT_DEFAULT_IMAGE } from '@/constants';
+import { useIsBackorderEnabled } from '@/hooks/useIsBackorderEnabled';
 import { useMobile } from '@/hooks/useMobile';
 import { useB3Lang } from '@/lib/lang';
 import { GlobalContext } from '@/shared/global';
@@ -13,10 +15,11 @@ import {
   getB2BJuniorPlaceOrder,
   getB2BShoppingListDetails,
   getBcShoppingListDetails,
-  searchProducts,
   updateB2BShoppingList,
   updateBcShoppingList,
 } from '@/shared/service/b2b';
+import { getVariantInfoBySkus, searchProducts } from '@/shared/service/b2b/graphql/product';
+import { deleteCart, getCart } from '@/shared/service/bc/graphql/cart';
 import {
   activeCurrencyInfoSelector,
   isB2BUserSelector,
@@ -27,8 +30,15 @@ import { CustomerRole } from '@/types/company';
 import { ShoppingListStatus } from '@/types/shoppingList';
 import { verifyLevelPermission } from '@/utils/b3CheckPermissions/check';
 import { b2bPermissionsMap } from '@/utils/b3CheckPermissions/config';
-import { calculateProductListPrice, getBCPrice } from '@/utils/b3Product/b3Product';
+import b2bLogger from '@/utils/b3Logger';
 import {
+  addQuoteDraftProducts,
+  calculateProductListPrice,
+  getBCPrice,
+  validProductQty,
+} from '@/utils/b3Product/b3Product';
+import {
+  addLineItems,
   conversionProductsList,
   CustomerInfoProps,
   ListItemProps,
@@ -37,9 +47,22 @@ import {
   ShoppingListInfoProps,
 } from '@/utils/b3Product/shared/config';
 import { snackbar } from '@/utils/b3Tip';
+import b3TriggerCartNumber from '@/utils/b3TriggerCartNumber';
 import { channelId } from '@/utils/basicConfig';
+import {
+  CartError,
+  createOrUpdateExistingCart as rawCreateOrUpdateExistingCart,
+  deleteCartData,
+  updateCart as rawUpdateCart,
+} from '@/utils/cartUtils';
+import { trackEcommerceEvent } from '@/utils/gtmDataLayer';
+import {
+  convertStockAndThresholdValidationErrorToWarning,
+  validateProducts,
+} from '@/utils/validateProducts';
 
 import { type PageProps } from '../PageProps';
+import { getQuoteValidationErrorMessage } from '../quote/shared/getQuoteValidationErrorMessage';
 
 import AddToShoppingList from './components/AddToShoppingList';
 import ReAddToCart from './components/ReAddToCart';
@@ -64,6 +87,20 @@ interface UpdateShoppingListParamsProps {
   channelId?: number;
 }
 
+const mapToProductsFailedArray = (items: ProductsProps[]) => {
+  return items.map((item: ProductsProps) => {
+    return {
+      ...item,
+      isStock: item.node.productsSearch.inventoryTracking === 'none' ? '0' : '1',
+      minQuantity: item.node.productsSearch.orderQuantityMinimum,
+      maxQuantity: item.node.productsSearch.orderQuantityMaximum,
+      stock: item.node.productsSearch.unlimitedBackorder
+        ? Infinity
+        : item.node.productsSearch.availableToSell,
+    };
+  });
+};
+
 const calculateSubTotal = (checkedArr: CustomFieldItems) => {
   if (checkedArr.length > 0) {
     let total = 0.0;
@@ -80,8 +117,75 @@ const calculateSubTotal = (checkedArr: CustomFieldItems) => {
 
     return (1000 * total) / 1000;
   }
+
   return 0.0;
 };
+
+const verifyInventory = (checkedArr: ProductsProps[], inventoryInfos: ProductsProps[]) => {
+  const validateFailureArr: ProductsProps[] = [];
+  const validateSuccessArr: ProductsProps[] = [];
+
+  checkedArr.forEach((item: ProductsProps) => {
+    const { node } = item;
+
+    const inventoryInfo: CustomFieldItems =
+      inventoryInfos.find((option: CustomFieldItems) => option.variantSku === node.variantSku) ||
+      {};
+
+    if (inventoryInfo) {
+      let isPassVerify = true;
+      if (
+        inventoryInfo.isStock === '1' &&
+        (node?.quantity ? Number(node.quantity) : 0) > inventoryInfo.stock
+      )
+        isPassVerify = false;
+
+      if (
+        inventoryInfo.minQuantity !== 0 &&
+        (node?.quantity ? Number(node.quantity) : 0) < inventoryInfo.minQuantity
+      )
+        isPassVerify = false;
+
+      if (
+        inventoryInfo.maxQuantity !== 0 &&
+        (node?.quantity ? Number(node.quantity) : 0) > inventoryInfo.maxQuantity
+      )
+        isPassVerify = false;
+
+      if (isPassVerify) {
+        validateSuccessArr.push({
+          node,
+        });
+      } else {
+        validateFailureArr.push({
+          node: {
+            ...node,
+          },
+          stock: inventoryInfo.stock,
+          isStock: inventoryInfo.isStock,
+          maxQuantity: inventoryInfo.maxQuantity,
+          minQuantity: inventoryInfo.minQuantity,
+        });
+      }
+    }
+  });
+
+  return {
+    validateFailureArr,
+    validateSuccessArr,
+  };
+};
+
+interface Option {
+  option_id: string | number;
+  option_value: string | number;
+}
+
+const getOptionsList = (options: Option[]) =>
+  options.map((opt) => ({
+    optionId: opt.option_id,
+    optionValue: opt.option_value,
+  }));
 
 function useData() {
   const { id = '' } = useParams();
@@ -126,12 +230,13 @@ function useData() {
     return isB2BUser ? deleteB2BShoppingListItem(options) : deleteBcShoppingListItem(options);
   };
 
+  const isJuniorBuyer = Number(role) === CustomerRole.JUNIOR_BUYER;
+
   return {
     id,
     openAPPParams,
     productQuoteEnabled,
     isB2BUser,
-    role,
     isAgenting,
     primaryColor,
     shoppingListCreateActionsPermission,
@@ -140,10 +245,44 @@ function useData() {
     getProducts,
     getShoppingList,
     deleteShoppingListItem,
+    isJuniorBuyer,
   };
 }
 
 // 0: Admin, 1: Senior buyer, 2: Junior buyer, 3: Super admin
+
+const createOrUpdateExistingCart = (products: ProductsProps[]) =>
+  rawCreateOrUpdateExistingCart(addLineItems(products));
+
+const updateCart = (cartInfo: any, products: ProductsProps[]) =>
+  rawUpdateCart(cartInfo, addLineItems(products));
+
+const partialAddToCart = async (checkedArr: ProductsProps[]) => {
+  try {
+    await createOrUpdateExistingCart(checkedArr);
+    return [];
+  } catch (apiError: unknown) {
+    if (!(apiError instanceof CartError)) {
+      throw apiError;
+    }
+
+    const { success, error, warning } = await validateProducts(
+      checkedArr.map((item) => ({
+        productId: item.node.productId,
+        variantId: item.node.variantId,
+        quantity: item.node.quantity ?? 0,
+        productOptions: getOptionsList(JSON.parse(item.node.optionList || '[]')),
+        item,
+      })),
+    );
+
+    if (success.length > 0) {
+      await createOrUpdateExistingCart(success.map((p) => p.product.item));
+    }
+
+    return [...error, ...warning];
+  }
+};
 
 function ShoppingListDetails({ setOpenPage }: PageProps) {
   const {
@@ -151,7 +290,6 @@ function ShoppingListDetails({ setOpenPage }: PageProps) {
     openAPPParams,
     productQuoteEnabled,
     isB2BUser,
-    role,
     isAgenting,
     primaryColor,
     shoppingListCreateActionsPermission,
@@ -160,7 +298,12 @@ function ShoppingListDetails({ setOpenPage }: PageProps) {
     getProducts,
     getShoppingList,
     deleteShoppingListItem,
+    isJuniorBuyer,
   } = useData();
+
+  const companyId = useAppSelector(({ company }) => company.companyInfo.id);
+  const customerGroupId = useAppSelector(({ company }) => company.customer.customerGroupId);
+
   const navigate = useNavigate();
   const [isMobile] = useMobile();
   const { dispatch } = useContext(ShoppingListDetailsContext);
@@ -169,11 +312,9 @@ function ShoppingListDetails({ setOpenPage }: PageProps) {
 
   const tableRef = useRef<TableRefProps | null>(null);
 
-  const featureFlags = useFeatureFlags();
-  const backendValidationEnabled =
-    featureFlags['B2B-3318.move_stock_and_backorder_validation_to_backend'] ?? false;
+  const isBackorderEnabled = useIsBackorderEnabled();
 
-  const [checkedArr, setCheckedArr] = useState<CustomFieldItems>([]);
+  const [checkedArr, setCheckedArr] = useState<ProductsProps[]>([]);
   const [shoppingListInfo, setShoppingListInfo] = useState<null | ShoppingListInfoProps>(null);
   const [customerInfo, setCustomerInfo] = useState<null | CustomerInfoProps>(null);
   const [isRequestLoading, setIsRequestLoading] = useState(false);
@@ -181,7 +322,7 @@ function ShoppingListDetails({ setOpenPage }: PageProps) {
   const [deleteOpen, setDeleteOpen] = useState<boolean>(false);
   const [deleteItemId, setDeleteItemId] = useState<number | string>('');
 
-  const [validateSuccessProducts, setValidateSuccessProducts] = useState<ProductsProps[]>([]);
+  const [successProductsCount, setSuccessProductsCount] = useState<number>(0);
   const [validateFailureProducts, setValidateFailureProducts] = useState<ProductsProps[]>([]);
 
   const [allowJuniorPlaceOrder, setAllowJuniorPlaceOrder] = useState<boolean>(false);
@@ -206,9 +347,7 @@ function ShoppingListDetails({ setOpenPage }: PageProps) {
 
     return submitShoppingListPermission;
   }, [submitShoppingListPermission, isB2BUser, shoppingListInfo]);
-  const b2bSubmitShoppingListPermission = isB2BUser
-    ? submitShoppingList
-    : role === CustomerRole.JUNIOR_BUYER;
+  const b2bSubmitShoppingListPermission = isB2BUser ? submitShoppingList : isJuniorBuyer;
 
   const isJuniorApprove =
     shoppingListInfo?.status === ShoppingListStatus.Approved && b2bSubmitShoppingListPermission;
@@ -350,7 +489,7 @@ function ShoppingListDetails({ setOpenPage }: PageProps) {
         await deleteShoppingListItem(itemId);
 
         if (checkedArr.length > 0) {
-          const newCheckedArr = checkedArr.filter((item: ListItemProps) => {
+          const newCheckedArr = checkedArr.filter((item) => {
             const { itemId: checkedItemId } = item.node;
 
             return itemId !== checkedItemId;
@@ -360,7 +499,7 @@ function ShoppingListDetails({ setOpenPage }: PageProps) {
         }
       } else {
         if (checkedArr.length === 0) return;
-        checkedArr.forEach(async (item: ListItemProps) => {
+        checkedArr.forEach(async (item) => {
           const { node } = item;
 
           await deleteShoppingListItem(node.itemId);
@@ -409,6 +548,386 @@ function ShoppingListDetails({ setOpenPage }: PageProps) {
     }
   }, [shoppingListInfo, isB2BUser]);
 
+  const shouldRedirectToCheckoutAfterRetry = (): void => {
+    if (
+      allowJuniorPlaceOrder &&
+      submitShoppingListPermission &&
+      shoppingListInfo?.status === ShoppingListStatus.Approved
+    ) {
+      window.location.href = CHECKOUT_URL;
+    } else {
+      snackbar.success(b3Lang('shoppingList.footer.productsAddedToCart'), {
+        action: {
+          label: b3Lang('shoppingList.footer.viewCart'),
+          onClick: () => {
+            if (window.b2b.callbacks.dispatchEvent('on-click-cart-button')) {
+              window.location.href = CART_URL;
+            }
+          },
+        },
+      });
+      b3TriggerCartNumber();
+    }
+
+    setSuccessProductsCount(0);
+    setValidateFailureProducts([]);
+  };
+
+  const retryAddToCartFrontend = async (products: ProductsProps[]) => {
+    const isValidate = products.every((item: ProductsProps) => item.isValid);
+
+    if (!isValidate) {
+      snackbar.error(b3Lang('shoppingList.reAddToCart.fillCorrectQuantity'));
+      return;
+    }
+
+    const res = await createOrUpdateExistingCart(products);
+
+    if (!res.errors) {
+      shouldRedirectToCheckoutAfterRetry();
+    }
+
+    if (res.errors) {
+      snackbar.error(res.message);
+    }
+
+    b3TriggerCartNumber();
+  };
+
+  const retryAddToCartBackend = async (products: ProductsProps[]) => {
+    try {
+      const errors = await partialAddToCart(products);
+
+      setSuccessProductsCount(products.length - errors.length);
+      setValidateFailureProducts(mapToProductsFailedArray(errors.map((p) => p.product.item)));
+
+      if (!errors.length) {
+        shouldRedirectToCheckoutAfterRetry();
+      }
+
+      b3TriggerCartNumber();
+    } catch (e: unknown) {
+      if (e instanceof Error) {
+        snackbar.error(e.message);
+      }
+    }
+  };
+
+  const addToQuote = async (products: CustomFieldItems[]) => {
+    if (isBackorderEnabled) {
+      const validatedProducts = await validateProducts(products);
+      const { success, warning, error } =
+        convertStockAndThresholdValidationErrorToWarning(validatedProducts);
+
+      error.forEach((err) => {
+        snackbar.error(
+          getQuoteValidationErrorMessage({
+            b3Lang,
+            errorCode: err.error.errorCode,
+            productName: err.product.node?.productName || '',
+          }),
+        );
+      });
+
+      const validProducts = [...success, ...warning].map((product) => product.product);
+
+      addQuoteDraftProducts(validProducts);
+
+      return validProducts.length > 0;
+    }
+
+    addQuoteDraftProducts(products);
+
+    return true;
+  };
+
+  const handleAddSelectedToQuote = async () => {
+    if (checkedArr.length === 0) {
+      snackbar.error(b3Lang('shoppingList.footer.selectOneItem'));
+      return;
+    }
+
+    setIsRequestLoading(true);
+
+    try {
+      const productsWithSku = checkedArr.filter((checkedItem) => {
+        const {
+          node: { variantSku },
+        } = checkedItem;
+
+        return variantSku !== '' && variantSku !== null && variantSku !== undefined;
+      });
+
+      const noSkuProducts = checkedArr.filter((checkedItem) => {
+        const {
+          node: { variantSku },
+        } = checkedItem;
+
+        return !variantSku;
+      });
+
+      if (noSkuProducts.length > 0) {
+        snackbar.error(b3Lang('shoppingList.footer.cantAddProductsNoSku'));
+      }
+
+      if (noSkuProducts.length === checkedArr.length) return;
+
+      const productIds: number[] = [];
+      productsWithSku.forEach((product) => {
+        const { node } = product;
+
+        if (!productIds.includes(Number(node.productId))) {
+          productIds.push(Number(node.productId));
+        }
+      });
+
+      const { productsSearch } = await searchProducts({
+        productIds,
+        companyId,
+        customerGroupId,
+      });
+
+      const newProductInfo: CustomFieldItems = conversionProductsList(productsSearch);
+      let errorMessage = '';
+      let isFoundVariant = true;
+
+      const newProducts: CustomFieldItems[] = [];
+      productsWithSku.forEach((product) => {
+        const {
+          node: {
+            basePrice,
+            optionList,
+            variantSku,
+            productId,
+            productName,
+            quantity,
+            variantId,
+            tax,
+          },
+        } = product;
+
+        const optionsList = getOptionsList(JSON.parse(optionList));
+
+        const currentProductSearch = newProductInfo.find(
+          (product: CustomFieldItems) => Number(product.id) === Number(productId),
+        );
+
+        const variantItem = currentProductSearch?.variants.find(
+          (item: CustomFieldItems) => item.sku === variantSku,
+        );
+
+        if (!variantItem) {
+          errorMessage = b3Lang('shoppingList.footer.notFoundSku', {
+            sku: variantSku,
+          });
+          isFoundVariant = false;
+        }
+
+        const quoteListitem = {
+          node: {
+            id: uuid(),
+            variantSku: variantItem?.sku || variantSku,
+            variantId,
+            productsSearch: {
+              ...currentProductSearch,
+              newSelectOptionList: optionsList,
+              variantId,
+            },
+            primaryImage: variantItem?.image_url || PRODUCT_DEFAULT_IMAGE,
+            productName,
+            quantity: Number(quantity) || 1,
+            optionList: JSON.stringify(optionsList),
+            productId,
+            basePrice,
+            tax,
+          },
+        };
+
+        newProducts.push(quoteListitem);
+      });
+
+      const isValidQty = validProductQty(newProducts);
+
+      if (!isFoundVariant) {
+        snackbar.error(errorMessage);
+
+        return;
+      }
+
+      if (isValidQty) {
+        await calculateProductListPrice(newProducts, '2');
+
+        const success = await addToQuote(newProducts);
+        if (success) {
+          snackbar.success(b3Lang('shoppingList.footer.productsAddedToQuote'), {
+            action: {
+              label: b3Lang('shoppingList.footer.viewQuote'),
+              onClick: () => {
+                navigate('/quoteDraft');
+              },
+            },
+          });
+        }
+      } else {
+        snackbar.error(b3Lang('shoppingList.footer.productsLimit'), {
+          action: {
+            label: b3Lang('shoppingList.footer.viewQuote'),
+            onClick: () => {
+              navigate('/quoteDraft');
+            },
+          },
+        });
+      }
+    } catch (e) {
+      b2bLogger.error(e);
+    } finally {
+      setIsRequestLoading(false);
+    }
+  };
+
+  const retryAddToCart = isBackorderEnabled ? retryAddToCartBackend : retryAddToCartFrontend;
+
+  const shouldRedirectToCheckoutAfterAddToCart = () => {
+    if (
+      allowJuniorPlaceOrder &&
+      b2bSubmitShoppingListPermission &&
+      shoppingListInfo?.status === ShoppingListStatus.Approved
+    ) {
+      window.location.href = CHECKOUT_URL;
+    } else {
+      snackbar.success(b3Lang('shoppingList.footer.productsAddedToCart'), {
+        action: {
+          label: b3Lang('shoppingList.footer.viewCart'),
+          onClick: () => {
+            if (window.b2b.callbacks.dispatchEvent('on-click-cart-button')) {
+              window.location.href = CART_URL;
+            }
+          },
+        },
+      });
+      b3TriggerCartNumber();
+    }
+  };
+
+  const handleAddToCartOnFrontend = async () => {
+    const skus: string[] = [];
+
+    let cantPurchase = '';
+
+    checkedArr.forEach((item: ProductsProps) => {
+      const { node } = item;
+
+      if (node.productsSearch.availability === 'disabled') {
+        cantPurchase += `${node.variantSku},`;
+      }
+
+      skus.push(node.variantSku);
+    });
+
+    if (cantPurchase) {
+      snackbar.error(
+        b3Lang('shoppingList.footer.unavailableProducts', {
+          skus: cantPurchase.slice(0, -1),
+        }),
+      );
+      return;
+    }
+
+    const getInventoryInfos = await getVariantInfoBySkus(skus);
+
+    const { validateFailureArr, validateSuccessArr } = verifyInventory(
+      checkedArr,
+      getInventoryInfos?.variantSku || [],
+    );
+
+    if (validateSuccessArr.length !== 0) {
+      const cartInfo = await getCart();
+      let res = null;
+
+      if (allowJuniorPlaceOrder && cartInfo.data.site.cart) {
+        await deleteCart(deleteCartData(cartInfo.data.site.cart.entityId));
+        res = await updateCart(cartInfo, validateSuccessArr);
+      } else {
+        res = await createOrUpdateExistingCart(validateSuccessArr);
+        b3TriggerCartNumber();
+      }
+      if (res && res.errors) {
+        snackbar.error(res.errors[0].message);
+      } else if (validateFailureArr.length === 0) {
+        // Verndale Customization: Track add_to_cart event in GTM
+        await trackEcommerceEvent(
+          'add_to_cart',
+          validateSuccessArr,
+          shoppingListInfo?.name || 'Shopping List',
+          String(shoppingListInfo?.id || ''),
+        );
+        // End Verndale Customization
+
+        shouldRedirectToCheckoutAfterAddToCart();
+      }
+    }
+
+    setValidateFailureProducts(validateFailureArr);
+    setSuccessProductsCount(validateSuccessArr.length);
+  };
+
+  const handleAddToCartBackend = async () => {
+    try {
+      const cartInfo = await getCart();
+      if (allowJuniorPlaceOrder && cartInfo.data.site.cart) {
+        await deleteCart(deleteCartData(cartInfo.data.site.cart.entityId));
+        await updateCart(cartInfo, checkedArr);
+      } else {
+        const errors = await partialAddToCart(checkedArr);
+
+        setSuccessProductsCount(checkedArr.length - errors.length);
+        setValidateFailureProducts(mapToProductsFailedArray(errors.map((p) => p.product.item)));
+
+        if (!errors.length) {
+          // Verndale Customization: Track add_to_cart event in GTM
+          await trackEcommerceEvent(
+            'add_to_cart',
+            checkedArr,
+            shoppingListInfo?.name || 'Shopping List',
+            String(shoppingListInfo?.id || ''),
+          );
+          // End Verndale Customization
+
+          shouldRedirectToCheckoutAfterAddToCart();
+        }
+
+        b3TriggerCartNumber();
+      }
+    } catch (e: unknown) {
+      if (e instanceof Error) {
+        setValidateFailureProducts(mapToProductsFailedArray(checkedArr));
+        snackbar.error(e.message);
+        // eslint-disable-next-line no-console
+        console.error(e);
+      }
+    }
+  };
+
+  const addToCart = isBackorderEnabled ? handleAddToCartBackend : handleAddToCartOnFrontend;
+
+  // Add selected product to cart
+  const handleAddProductsToCart = async () => {
+    if (checkedArr.length === 0) {
+      snackbar.error(b3Lang('shoppingList.footer.selectOneItem'));
+      return;
+    }
+
+    setValidateFailureProducts([]);
+    setSuccessProductsCount(0);
+
+    try {
+      setIsRequestLoading(true);
+      await addToCart();
+    } finally {
+      setIsRequestLoading(false);
+    }
+  };
+
   return (
     <>
       <Box
@@ -422,7 +941,6 @@ function ShoppingListDetails({ setOpenPage }: PageProps) {
           isB2BUser={isB2BUser}
           shoppingListInfo={shoppingListInfo}
           customerInfo={customerInfo}
-          role={role}
           goToShoppingLists={goToShoppingLists}
           handleUpdateShoppingList={handleUpdateShoppingList}
           setOpenPage={setOpenPage}
@@ -487,24 +1005,13 @@ function ShoppingListDetails({ setOpenPage }: PageProps) {
                   isB2BUser={isB2BUser}
                   productQuoteEnabled={productQuoteEnabled}
                   isCanEditShoppingList={isCanEditShoppingList}
-                  role={role}
+                  isJuniorBuyer={isJuniorBuyer}
                 />
               </Grid>
             </B3Spin>
           </Box>
 
-          <Grid
-            item
-            sx={
-              isMobile
-                ? {
-                    flexBasis: '100%',
-                  }
-                : {
-                    flexBasis: '340px',
-                  }
-            }
-          >
+          <Grid item sx={isMobile ? { flexBasis: '100%' } : { flexBasis: '340px' }}>
             {b2bAndBcShoppingListActionsPermissions && !isReadForApprove && !isJuniorApprove && (
               <AddToShoppingList
                 updateList={updateList}
@@ -520,31 +1027,30 @@ function ShoppingListDetails({ setOpenPage }: PageProps) {
             <ShoppingDetailFooter
               shoppingListInfo={shoppingListInfo}
               allowJuniorPlaceOrder={allowJuniorPlaceOrder}
-              checkedArr={checkedArr}
               selectedSubTotal={calculateSubTotal(checkedArr)}
-              setLoading={setIsRequestLoading}
-              setDeleteOpen={setDeleteOpen}
-              setValidateFailureProducts={setValidateFailureProducts}
-              setValidateSuccessProducts={setValidateSuccessProducts}
+              selectedProductCount={checkedArr.length}
+              onDelete={() => setDeleteOpen(true)}
+              onAddToCart={handleAddProductsToCart}
+              onAddToQuote={handleAddSelectedToQuote}
               isB2BUser={isB2BUser}
               customColor={primaryColor}
               isCanEditShoppingList={isCanEditShoppingList}
-              role={role}
-              backendValidationEnabled={backendValidationEnabled}
+              isJuniorBuyer={isJuniorBuyer}
             />
           )}
       </Box>
 
       <ReAddToCart
+        isOpen={validateFailureProducts.length > 0}
+        onCancel={() => {
+          setSuccessProductsCount(0);
+          setValidateFailureProducts([]);
+        }}
+        onAddToCart={retryAddToCart}
         shoppingListInfo={shoppingListInfo}
-        role={role}
         products={validateFailureProducts}
-        successProducts={validateSuccessProducts.length}
+        successProducts={successProductsCount}
         allowJuniorPlaceOrder={allowJuniorPlaceOrder}
-        setValidateFailureProducts={setValidateFailureProducts}
-        setValidateSuccessProducts={setValidateSuccessProducts}
-        textAlign={isMobile ? 'left' : 'right'}
-        backendValidationEnabled={backendValidationEnabled}
       />
 
       <ShoppingDetailDeleteItems

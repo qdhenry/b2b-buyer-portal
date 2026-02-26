@@ -6,14 +6,9 @@ import ceil from 'lodash-es/ceil';
 import { TableColumnItem } from '@/components/table/B3Table';
 import PaginationTable from '@/components/table/PaginationTable';
 import { PRODUCT_DEFAULT_IMAGE } from '@/constants';
-import { useFeatureFlags } from '@/hooks/useFeatureFlags';
+import { useIsBackorderEnabled } from '@/hooks/useIsBackorderEnabled';
 import { LangFormatFunction, useB3Lang } from '@/lib/lang';
-import {
-  deleteProductFromDraftQuoteList,
-  setDraftProduct,
-  useAppDispatch,
-  useAppSelector,
-} from '@/store';
+import { deleteProductFromDraftQuoteList, setDraftProduct, useAppDispatch } from '@/store';
 import { Product } from '@/types';
 import { QuoteItem } from '@/types/quotes';
 import { currencyFormat } from '@/utils/b3CurrencyFormat';
@@ -133,30 +128,50 @@ function getAvailabilityWarningsBackend(
   };
 
   let warningMessage: string | null = null;
-  let warningDetails: string | null = null;
 
   if (product.inventoryTracking !== 'none') {
     let hasUnlimitedBackorder = product.unlimitedBackorder;
-    let availableStock = product.availableToSell;
+    let { availableToSell } = product;
 
     if (product.inventoryTracking === 'variant' && product.variants) {
       const currentVariant = product.variants.find(({ sku }) => sku === row.variantSku);
       if (currentVariant) {
         hasUnlimitedBackorder = currentVariant.unlimited_backorder;
-        availableStock = currentVariant.available_to_sell;
+        availableToSell = currentVariant.available_to_sell;
       }
     }
 
-    if (!hasUnlimitedBackorder && availableStock < row.quantity) {
-      warningMessage = b3Lang('quoteDraft.quoteTable.outOfStock.tip');
-      warningDetails = b3Lang('quoteDraft.quoteTable.oosNumber.tip', {
-        qty: availableStock,
+    if (!hasUnlimitedBackorder && availableToSell < row.quantity) {
+      warningMessage = b3Lang('quoteDraft.quoteTable.outOfStock.tipWithAvailability', {
+        availableToSell: availableToSell ?? 0,
       });
     }
   }
 
-  return { warningMessage, warningDetails };
+  return { warningMessage, warningDetails: null };
 }
+
+const getThresholdWarning = (row: QuoteItem['node'], b3Lang: LangFormatFunction): string | null => {
+  const minQuantity = Number(row.productsSearch?.orderQuantityMinimum || 0);
+  const maxQuantity = Number(row.productsSearch?.orderQuantityMaximum || 0);
+  const quantity = Number(row.quantity || 0);
+  const sku = row.variantSku || row.productsSearch?.sku || '';
+
+  if (minQuantity > 0 && quantity < minQuantity) {
+    return b3Lang('purchasedProducts.quickOrderPad.minQuantityMessage', {
+      minQuantity,
+      sku,
+    });
+  }
+  if (maxQuantity > 0 && quantity > maxQuantity) {
+    return b3Lang('purchasedProducts.quickOrderPad.maxQuantityMessage', {
+      maxQuantity,
+      sku,
+    });
+  }
+
+  return null;
+};
 
 interface QuoteTableProps {
   total: number;
@@ -167,16 +182,12 @@ interface QuoteTableProps {
 function QuoteTable({ total, items, updateSummary }: QuoteTableProps) {
   const b3Lang = useB3Lang();
   const dispatch = useAppDispatch();
-  const featureFlags = useFeatureFlags();
+  const isBackorderEnabled = useIsBackorderEnabled();
 
   const [isRequestLoading, setIsRequestLoading] = useState(false);
   const [chooseOptionsOpen, setSelectedOptionsOpen] = useState(false);
   const [optionsProduct, setOptionsProduct] = useState<Product>();
   const [optionsProductId, setOptionsProductId] = useState<string>('');
-
-  const showAvailabilityWarnings = useAppSelector(
-    ({ global }) => !global.blockPendingQuoteNonPurchasableOOS.isEnableProduct,
-  );
 
   const handleUpdateProductQty = async (row: QuoteItem['node'], quantity: number) => {
     const product = await setModifierQtyPrice(row, quantity);
@@ -297,9 +308,7 @@ function QuoteTable({ total, items, updateSummary }: QuoteTableProps) {
     snackbar.success(b3Lang('quoteDraft.quoteTable.productUpdated'));
   };
 
-  const getAvailabilityWarnings = featureFlags[
-    'B2B-3318.move_stock_and_backorder_validation_to_backend'
-  ]
+  const getAvailabilityWarnings = isBackorderEnabled
     ? getAvailabilityWarningsBackend
     : getAvailabilityWarningsFrontend;
 
@@ -308,7 +317,11 @@ function QuoteTable({ total, items, updateSummary }: QuoteTableProps) {
       key: 'Product',
       title: b3Lang('quoteDraft.quoteTable.product'),
       render: (row) => {
-        const { warningMessage, warningDetails } = getAvailabilityWarnings(row, b3Lang);
+        const availabilityWarning = getAvailabilityWarnings(row, b3Lang);
+        const thresholdWarning = getThresholdWarning(row, b3Lang);
+        const warningMessage = availabilityWarning.warningMessage
+          ? availabilityWarning.warningMessage
+          : thresholdWarning;
         const productOptionsValues = getProductOptionsValues(row);
         const productUrl = row.productsSearch?.productUrl;
 
@@ -359,7 +372,7 @@ function QuoteTable({ total, items, updateSummary }: QuoteTableProps) {
                 </Box>
               )}
 
-              {showAvailabilityWarnings && warningMessage && (
+              {warningMessage && (
                 <Box sx={{ color: 'red' }}>
                   <Box
                     sx={{
@@ -372,7 +385,9 @@ function QuoteTable({ total, items, updateSummary }: QuoteTableProps) {
                     <WarningIcon color="error" fontSize="small" />
                     {warningMessage}
                   </Box>
-                  {warningDetails && <Box>{warningDetails}</Box>}
+                  {availabilityWarning.warningDetails && (
+                    <Box>{availabilityWarning.warningDetails}</Box>
+                  )}
                 </Box>
               )}
             </Box>

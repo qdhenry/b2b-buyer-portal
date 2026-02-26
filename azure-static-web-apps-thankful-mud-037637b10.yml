@@ -1,0 +1,41 @@
+name: Azure Static Web Apps CI/CD
+
+pr:
+  branches:
+    include:
+      - main
+trigger:
+  branches:
+    include:
+      - main
+
+variables:
+  nodeVersion: '22.x'
+
+jobs:
+- job: build_and_deploy_job
+  displayName: Build and Deploy Job
+  condition: or(eq(variables['Build.Reason'], 'Manual'),or(eq(variables['Build.Reason'], 'PullRequest'),eq(variables['Build.Reason'], 'IndividualCI')))
+  pool:
+    vmImage: ubuntu-latest
+  variables:
+  - group: Azure-Static-Web-Apps-thankful-mud-037637b10-variable-group
+  steps:
+  - checkout: self
+    submodules: true
+  - task: NodeTool@0
+    inputs:
+      versionSpec: $(nodeVersion)
+    displayName: 'Install Node.js 22'
+  - script: yarn install
+    displayName: 'Install dependencies'
+  - script: yarn build
+    displayName: 'Build application with Turbo'
+  - task: AzureStaticWebApp@0
+    inputs:
+      azure_static_web_apps_api_token: $(AZURE_STATIC_WEB_APPS_API_TOKEN_THANKFUL_MUD_037637B10)
+      app_location: "apps/storefront"
+      api_location: ""
+      output_location: "apps/storefront"
+      skip_app_build: true
+    displayName: 'Deploy to Azure Static Web Apps'

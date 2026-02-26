@@ -241,8 +241,8 @@ it('renders invoice information in the table', async () => {
   expect(cells[2]).toHaveTextContent('3322');
   expect(cells[3]).toHaveTextContent('Monsters Inc.');
   expect(cells[4]).toHaveTextContent('1234');
-  expect(cells[5]).toHaveTextContent('13 March 2025');
-  expect(cells[6]).toHaveTextContent('13 October 2025');
+  expect(cells[5]).toHaveTextContent('March 13, 2025');
+  expect(cells[6]).toHaveTextContent('October 13, 2025');
   expect(cells[7]).toHaveTextContent('$922.00');
   expect(cells[8]).toHaveTextContent('$433.00');
 
@@ -985,13 +985,13 @@ describe('when using the action menu', () => {
 
     const dialog = await screen.findByRole('dialog', { name: 'Payments history' });
 
-    expect(within(dialog).getByText('23 July 2025')).toBeInTheDocument();
+    expect(within(dialog).getByText('July 23, 2025')).toBeInTheDocument();
     expect(within(dialog).getByText('Foo Bar')).toBeInTheDocument();
     expect(within(dialog).getByText('visa ending in 1111')).toBeInTheDocument();
     expect(within(dialog).getByText('1234')).toBeInTheDocument();
     expect(within(dialog).getByText('$50.50')).toBeInTheDocument();
 
-    expect(within(dialog).getByText('14 July 2025')).toBeInTheDocument();
+    expect(within(dialog).getByText('July 14, 2025')).toBeInTheDocument();
     expect(within(dialog).getByText('Bar Baz')).toBeInTheDocument();
     expect(within(dialog).getByText('visa ending in 1212')).toBeInTheDocument();
     expect(within(dialog).getByText('3222')).toBeInTheDocument();
@@ -1216,14 +1216,20 @@ it('exports selected invoices as CSV', async () => {
                   node: {
                     id: '1441',
                     invoiceNumber: '3322',
-                    companyInfo: { companyId: preloadedState.company.companyInfo.id },
+                    companyInfo: {
+                      companyId: preloadedState.company.companyInfo.id,
+                      companyName: 'Acme Inc.',
+                    },
                   },
                 }),
                 buildInvoiceWith({
                   node: {
                     id: '1313',
                     invoiceNumber: '4343',
-                    companyInfo: { companyId: preloadedState.company.companyInfo.id },
+                    companyInfo: {
+                      companyId: preloadedState.company.companyInfo.id,
+                      companyName: 'Acme Inc.',
+                    },
                   },
                 }),
               ],
@@ -1268,11 +1274,13 @@ it('exports selected invoices as CSV', async () => {
 
   await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
 
-  const row1 = screen.getByRole('row', { name: /3322/ });
-  const row2 = screen.getByRole('row', { name: /4343/ });
+  const rows = screen.getAllByRole('row', { name: /Acme Inc./ });
 
-  await userEvent.click(within(row1).getByRole('checkbox'));
-  await userEvent.click(within(row2).getByRole('checkbox'));
+  await Promise.all(
+    rows
+      .map((row) => within(row).getByRole('checkbox'))
+      .map((checkbox) => userEvent.click(checkbox)),
+  );
 
   const exportButton = screen.getByRole('button', { name: 'Export selected as CSV' });
   await userEvent.click(exportButton);

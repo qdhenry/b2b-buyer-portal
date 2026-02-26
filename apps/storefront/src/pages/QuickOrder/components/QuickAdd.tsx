@@ -1,29 +1,25 @@
-import { Box, Grid, Typography } from '@mui/material';
 import { Fragment, KeyboardEventHandler, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { FieldValues, useForm } from 'react-hook-form';
+import { Box, Grid, Typography } from '@mui/material';
 
 import CustomButton from '@/components/button/CustomButton';
 import { B3ControlTextField } from '@/components/form/B3ControlTextField';
 import B3Spin from '@/components/spin/B3Spin';
 import { CART_URL } from '@/constants';
 import { useBlockPendingAccountViewPrice } from '@/hooks/useBlockPendingAccountViewPrice';
-import { useFeatureFlags } from '@/hooks/useFeatureFlags';
+import { useIsBackorderEnabled } from '@/hooks/useIsBackorderEnabled';
 import { useB3Lang } from '@/lib/lang';
 import { getVariantInfoBySkus } from '@/shared/service/b2b';
 import { store, useAppSelector } from '@/store';
 import { snackbar } from '@/utils/b3Tip';
 import b3TriggerCartNumber from '@/utils/b3TriggerCartNumber';
 import { createOrUpdateExistingCart } from '@/utils/cartUtils';
-import {
-  ValidatedProductError,
-  ValidatedProductWarning,
-  validateProducts,
-} from '@/utils/validateProducts';
+import { trackEcommerceEvent } from '@/utils/gtmDataLayer';
+import { ValidatedProductError, validateProductsLegacy } from '@/utils/validateProducts';
 
 import { SimpleObject } from '../../../types';
 import { getCartProductInfo } from '../utils';
 
-import { trackEcommerceEvent } from '@/utils/gtmDataLayer';
 import {
   CatalogProduct,
   filterInputSkusForNotFoundProducts,
@@ -37,7 +33,7 @@ const INITIAL_NUM_ROWS = 3;
 export default function QuickAdd() {
   const b3Lang = useB3Lang();
   const buttonText = b3Lang('purchasedProducts.quickOrderPad.addProductsToCart');
-  const featureFlags = useFeatureFlags();
+  const isBackorderEnabled = useIsBackorderEnabled();
 
   const companyStatus = useAppSelector(({ company }) => company.companyInfo.status);
   const [numRows, setNumRows] = useState(INITIAL_NUM_ROWS);
@@ -218,16 +214,16 @@ export default function QuickAdd() {
   };
 
   const showErrors = (
-    value: CustomFieldItems,
+    formData: FieldValues,
     skus: string[],
     inputType: 'sku' | 'qty',
     message: string,
   ) => {
-    skus.forEach((sku) => {
-      const skuFieldName = Object.keys(value).find((name) => value[name] === sku) || '';
+    const lowerCaseSkus = skus.map((sku) => sku.toLowerCase());
 
-      if (skuFieldName) {
-        setError(skuFieldName.replace('sku', inputType), {
+    Object.entries(formData).forEach(([key, value]) => {
+      if (typeof value === 'string' && lowerCaseSkus.includes(value.toLowerCase())) {
+        setError(key.replace('sku', inputType), {
           type: 'manual',
           message,
         });
@@ -235,13 +231,13 @@ export default function QuickAdd() {
     });
   };
 
-  const clearInputValue = (value: CustomFieldItems, skus: string[]) => {
-    skus.forEach((sku) => {
-      const skuFieldName = Object.keys(value).find((name) => value[name] === sku) || '';
+  const clearInputValue = (formData: FieldValues, skus: string[]) => {
+    const lowerCaseSkus = skus.map((sku) => sku.toLowerCase());
 
-      if (skuFieldName) {
-        setValue(skuFieldName, '');
-        setValue(skuFieldName.replace('sku', 'qty'), '');
+    Object.entries(formData).forEach(([key, value]) => {
+      if (typeof value === 'string' && lowerCaseSkus.includes(value.toLowerCase())) {
+        setValue(key, '');
+        setValue(key.replace('sku', 'qty'), '');
       }
     });
   };
@@ -257,7 +253,7 @@ export default function QuickAdd() {
   };
 
   const handleFrontendValidation = async (
-    value: CustomFieldItems,
+    value: FieldValues,
     variantInfoList: CustomFieldItems[],
     skuValue: SimpleObject,
     skus: string[],
@@ -269,7 +265,8 @@ export default function QuickAdd() {
       showErrors(value, notFoundSku, 'sku', '');
       snackbar.error(
         b3Lang('purchasedProducts.quickAdd.notFoundSku', {
-          notFoundSku: notFoundSku.join(','),
+          count: notFoundSku.length,
+          notFoundSku: notFoundSku.join(', '),
         }),
       );
     }
@@ -278,7 +275,7 @@ export default function QuickAdd() {
       showErrors(value, notPurchaseSku, 'sku', '');
       snackbar.error(
         b3Lang('purchasedProducts.quickAdd.notPurchaseableSku', {
-          notPurchaseSku: notPurchaseSku.join(','),
+          notPurchaseSku: notPurchaseSku.join(', '),
         }),
       );
     }
@@ -294,7 +291,7 @@ export default function QuickAdd() {
 
       snackbar.error(
         b3Lang('purchasedProducts.quickAdd.insufficientStockSku', {
-          stockSku: stockSku.join(','),
+          stockSku: stockSku.join(', '),
         }),
       );
     }
@@ -325,31 +322,27 @@ export default function QuickAdd() {
     variantInfoList: CatalogProduct[],
     skuValue: SimpleObject,
     skus: string[],
-  ): Promise<{
-    productItems: CustomFieldItems[];
-    passSku: string[];
-    notFoundSkus: string[];
-    validationErrors: (ValidatedProductWarning | ValidatedProductError)[];
-  }> => {
+  ) => {
     const notFoundSkus = filterInputSkusForNotFoundProducts(skus, variantInfoList);
 
     if (variantInfoList.length === 0) {
-      return { productItems: [], passSku: [], notFoundSkus, validationErrors: [] };
+      return {
+        productItems: [],
+        notFoundSkus,
+        error: [],
+        warning: [],
+      };
     }
 
     const productsToValidate = mapCatalogToValidationPayload(variantInfoList, skuValue);
 
-    const { success, warning, error } = await validateProducts(productsToValidate);
+    const { success, warning, error } = await validateProductsLegacy(productsToValidate);
 
     const validProducts = success.map((product) => product.product);
 
-    const errors = [...warning, ...error];
-
     const productItems = mergeValidatedWithCatalog(validProducts, variantInfoList);
 
-    const passSku = productItems.map((item) => item.variantSku);
-
-    return { productItems, passSku, notFoundSkus, validationErrors: errors };
+    return { productItems, notFoundSkus, warning, error };
   };
 
   const addProductsToCart = async (products: CustomFieldItems[]) => {
@@ -373,6 +366,45 @@ export default function QuickAdd() {
     b3TriggerCartNumber();
   };
 
+  const showErrorMessage = (
+    formData: FieldValues,
+    error: ValidatedProductError<CustomFieldItems>,
+  ) => {
+    const sku = error.product.node?.sku || '';
+
+    if (error.error.type === 'network') {
+      const productName = error.product.node?.productName || '';
+      snackbar.error(b3Lang('quotes.productValidationFailed', { productName }));
+      if (sku) {
+        showErrors(formData, [sku], 'sku', '');
+      }
+      return;
+    }
+
+    if (error.error.errorCode === 'OOS') {
+      if (sku) {
+        const message = b3Lang('purchasedProducts.quickAdd.inlineErrors.insufficientStockSku', {
+          count: error.error.availableToSell,
+        });
+
+        showErrors(formData, [sku], 'qty', message);
+      }
+
+      snackbar.error(
+        b3Lang('purchasedProducts.quickAdd.insufficientStockSku', {
+          stockSku: sku || '',
+        }),
+      );
+
+      return;
+    }
+
+    if (sku) {
+      showErrors(formData, [sku], 'sku', '');
+    }
+    snackbar.error(error.error.message);
+  };
+
   const handleAddToList = () => {
     if (blockPendingAccountViewPrice && companyStatus === 0) {
       snackbar.info(
@@ -392,6 +424,7 @@ export default function QuickAdd() {
 
         const variantInfoList = await getVariantList(skus);
 
+        // Verndale Customization: Collect data layer items for GTM tracking
         let dataLayerItems: {
           productId: number;
           variantId: number;
@@ -400,46 +433,58 @@ export default function QuickAdd() {
           productName: string;
           basePrice: number;
         }[] = [];
+        // End Verndale Customization
 
-        if (featureFlags['B2B-3318.move_stock_and_backorder_validation_to_backend']) {
-          const result = await handleBackendValidation(variantInfoList, skuQuantityMap, skus);
-          const { productItems, passSku, notFoundSkus, validationErrors } = result;
+        if (isBackorderEnabled) {
+          const { productItems, notFoundSkus, warning, error } = await handleBackendValidation(
+            variantInfoList,
+            skuQuantityMap,
+            skus,
+          );
 
-          validationErrors.forEach((err) => {
-            if (err.status === 'error') {
-              if (err.error.type === 'network') {
-                snackbar.error(
-                  b3Lang('quotes.productValidationFailed', {
-                    productName: err.product.node?.productName || '',
-                  }),
-                );
-              } else {
-                snackbar.error(err.error.message);
-              }
-            } else {
-              snackbar.error(err.message);
+          error.forEach((err) => {
+            showErrorMessage(formData, err);
+          });
+
+          warning.forEach((warn) => {
+            snackbar.warning(warn.message);
+            const sku = warn.product.node?.sku;
+
+            if (sku) {
+              showErrors(formData, [sku], 'sku', '');
             }
           });
 
           if (notFoundSkus.length > 0) {
+            showErrors(
+              formData,
+              notFoundSkus,
+              'sku',
+              b3Lang('purchasedProducts.quickAdd.inlineErrors.notFoundSku'),
+            );
+
             snackbar.error(
               b3Lang('purchasedProducts.quickAdd.notFoundSku', {
-                notFoundSku: notFoundSkus.join(','),
+                count: notFoundSkus.length,
+                notFoundSku: notFoundSkus.join(', '),
               }),
             );
           }
 
           if (productItems.length > 0) {
-            dataLayerItems = productItems.map((item) => ({
+            // Verndale Customization: Build GTM data layer items
+            dataLayerItems = productItems.map((item: any) => ({
               productId: Number(item.productId),
               variantId: Number(item.variantId),
               quantity: Number(item.quantity),
               optionList: item.optionList ?? [],
-              productName: item.productName,
+              productName: item.productName ?? '',
               basePrice: item.calculatedPrice ? Number(item.calculatedPrice) : 0,
             }));
+            // End Verndale Customization
             await addProductsToCart(productItems);
-            clearInputValue(formData, passSku);
+            const skus = productItems.map((item) => item.variantSku);
+            clearInputValue(formData, skus);
           }
         } else {
           const { productItems, passSku } = await handleFrontendValidation(
@@ -450,15 +495,16 @@ export default function QuickAdd() {
           );
 
           if (productItems.length > 0) {
-            dataLayerItems = productItems.map((item) => ({
-              ...item,
+            // Verndale Customization: Build GTM data layer items
+            dataLayerItems = productItems.map((item: any) => ({
               productId: Number(item.productId),
               variantId: Number(item.variantId),
               quantity: Number(item.quantity),
               optionList: item.optionList ?? [],
-              productName: item.productName,
+              productName: item.productName ?? '',
               basePrice: item.calculatedPrice ? Number(item.calculatedPrice) : 0,
             }));
+            // End Verndale Customization
 
             await addProductsToCart(productItems);
             clearInputValue(formData, passSku);
@@ -466,26 +512,28 @@ export default function QuickAdd() {
         }
 
         // Verndale Customization: Track add to cart event in GTM
-        await trackEcommerceEvent(
-          'add_to_cart',
-          dataLayerItems.map((item) => ({
-            node: {
-              ...item,
-              productId: item.productId.toString(),
-              optionList:
-                item.optionList?.length > 0
-                  ? item.optionList
-                      .map((option: { optionValue: string }) => option.optionValue)
-                      .join(',')
-                  : '',
-              productName: item.productName,
-              basePrice: item.basePrice,
-            },
-          })),
-          'Quick Order',
-          '',
-          store,
-        );
+        if (dataLayerItems.length > 0) {
+          await trackEcommerceEvent(
+            'add_to_cart',
+            dataLayerItems.map((item) => ({
+              node: {
+                ...item,
+                productId: item.productId.toString(),
+                optionList:
+                  item.optionList?.length > 0
+                    ? item.optionList
+                        .map((option: { optionValue: string }) => option.optionValue)
+                        .join(',')
+                    : '',
+                productName: item.productName,
+                basePrice: item.basePrice,
+              },
+            })),
+            'Quick Order',
+            '',
+            store,
+          );
+        }
         // End Verndale Customization
       } catch (e) {
         if (e instanceof Error) {
@@ -505,7 +553,7 @@ export default function QuickAdd() {
 
   return (
     <B3Spin isSpinning={isLoading} spinningHeight="auto">
-      <Box sx={{ width: '100%' }}>
+      <Box sx={{ width: '100%' }} data-testid="quick-add">
         <Grid
           container
           sx={{

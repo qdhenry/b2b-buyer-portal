@@ -1,12 +1,6 @@
-import { store } from '@/store';
-import { clearCompanySlice } from '@/store/slices/company';
-
 import b2bVerifyBcLoginStatus from './b2bVerifyBcLoginStatus';
 import b2bLogger from './b3Logger';
-
-export const logoutSession = () => {
-  store.dispatch(clearCompanySlice());
-};
+import { logoutSession } from './logoutSession';
 
 export const isB2bTokenPage = (gotoUrl?: string) => {
   const noB2bTokenPages = ['quoteDraft', 'quoteDetail', 'register', 'login', 'forgotpassword'];
@@ -25,19 +19,20 @@ export const isB2bTokenPage = (gotoUrl?: string) => {
 };
 
 export const isUserGotoLogin = async (gotoUrl: string) => {
-  const isB2bPage = isB2bTokenPage(gotoUrl);
-  let isGotoLogin = false;
+  if (!isB2bTokenPage(gotoUrl)) {
+    return false;
+  }
 
   try {
     const isBcLogin = await b2bVerifyBcLoginStatus();
 
-    if (!isBcLogin && isB2bPage) {
+    if (!isBcLogin) {
       logoutSession();
-      isGotoLogin = true;
+      return true;
     }
   } catch (error: unknown) {
     b2bLogger.error(error);
   }
 
-  return isGotoLogin;
+  return false;
 };

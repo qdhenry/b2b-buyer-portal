@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { getB2BProductPurchasable } from '@/shared/service/b2b/graphql/product';
 import { useAppSelector } from '@/store';
 
-import { useFeatureFlags } from '../useFeatureFlags';
+import { useIsBackorderEnabled } from '../useIsBackorderEnabled';
 
 interface MyMutationRecord extends MutationRecord {
   target: HTMLElement;
@@ -20,7 +20,7 @@ interface ProductInfoProps {
 
 const usePurchasableQuote = (openQuickView: boolean) => {
   const [isBuyPurchasable, setBuyPurchasable] = useState<boolean>(true);
-  const featureFlags = useFeatureFlags();
+  const isBackorderEnabled = useIsBackorderEnabled();
 
   const productInfoRef = useRef<ProductInfoProps>({
     availability: false,
@@ -41,7 +41,7 @@ const usePurchasableQuote = (openQuickView: boolean) => {
         return false;
       }
 
-      if (featureFlags['B2B-3318.move_stock_and_backorder_validation_to_backend']) {
+      if (isBackorderEnabled) {
         if (unlimitedBackorder) {
           return false;
         }
@@ -53,7 +53,7 @@ const usePurchasableQuote = (openQuickView: boolean) => {
 
       return qty > inventoryLevel;
     },
-    [featureFlags],
+    [isBackorderEnabled],
   );
 
   useEffect(() => {

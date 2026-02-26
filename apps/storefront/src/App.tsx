@@ -24,6 +24,7 @@ import { getQuoteEnabled } from '@/utils/b3Init';
 
 import { b2bJumpPath } from './utils/b3CheckPermissions/b2bPermissionPath';
 import clearInvoiceCart from './utils/b3ClearCart';
+import setDayjsLocale from './utils/b3DateFormat/setDayjsLocale';
 import b2bLogger from './utils/b3Logger';
 import { isUserGotoLogin } from './utils/b3logout';
 import { isCompanyError } from './utils/companyUtils';
@@ -44,7 +45,7 @@ const FONT_URL = 'https://fonts.googleapis.com/css?family=Roboto:300,400,500,700
 export default function App() {
   const showPageMask = usePageMask();
   const {
-    state: { quoteConfig, storefrontConfig, productQuoteEnabled, registerEnabled },
+    state: { quoteConfig, storefrontConfig, productQuoteEnabled, registerEnabled, bcLanguage },
     dispatch,
   } = useContext(GlobalContext);
 
@@ -66,6 +67,10 @@ export default function App() {
   const authorizedPages = useMemo(() => {
     return isB2BUser ? b2bJumpPath(role) : PATH_ROUTES.ORDERS;
   }, [role, isB2BUser]);
+
+  useEffect(() => {
+    setDayjsLocale(bcLanguage);
+  }, [bcLanguage]);
 
   const handleAccountClick = (href: string, isRegisterAndLogin: boolean) => {
     showPageMask(true);
@@ -157,58 +162,63 @@ export default function App() {
     storeDispatch(setOpenPageReducer(setOpenPage));
     loginAndRegister();
     const init = async () => {
-      // bc graphql token
-      if (!bcGraphqlToken) {
-        await loginInfo();
-      }
-      setChannelStoreType();
-
-      // load the store config before fetching other data
-      // as some fetches depend on the store config or feature flags being present
-      await getStoreConfigs(styleDispatch, dispatch);
-
       try {
+        // bc graphql token
+        if (!bcGraphqlToken) {
+          await loginInfo();
+        }
+        setChannelStoreType();
+
+        // load the store config before fetching other data
+        // as some fetches depend on the store config or feature flags being present
+        await getStoreConfigs(styleDispatch, dispatch);
+
         await Promise.allSettled([
           getGlobalStoreTax(),
           setStorefrontConfig(dispatch),
           getCompanyInfo(role, b2bId),
         ]);
+
+        const userInfo = {
+          role: Number(role),
+          isAgenting,
+        };
+        if (!customerId) {
+          const info = await getCurrentCustomerInfo().catch((error) => {
+            if (isCompanyError(error)) {
+              gotoPage(`/login?loginFlag=${error.reason}`);
+            }
+          });
+          if (info) {
+            userInfo.role = info?.role;
+          }
+        }
+
+        // background login enter judgment and refresh
+        if (!pathname.includes('checkout') && !(customerId && !window.location.hash)) {
+          await gotoAllowedAppPage(Number(userInfo.role), gotoPage);
+        } else {
+          showPageMask(false);
+        }
+
+        if (customerId) {
+          clearInvoiceCart();
+        }
+
+        storeDispatch(
+          setGlobalCommonState({
+            isPageComplete: true,
+          }),
+        );
       } catch (e) {
         b2bLogger.error(e);
-      }
-
-      const userInfo = {
-        role: Number(role),
-        isAgenting,
-      };
-
-      if (!customerId) {
-        const info = await getCurrentCustomerInfo().catch((error) => {
-          if (isCompanyError(error)) {
-            gotoPage(`/login?loginFlag=${error.reason}`);
-          }
-        });
-        if (info) {
-          userInfo.role = info?.role;
-        }
-      }
-
-      // background login enter judgment and refresh
-      if (!pathname.includes('checkout') && !(customerId && !window.location.hash)) {
-        await gotoAllowedAppPage(Number(userInfo.role), gotoPage);
-      } else {
         showPageMask(false);
+        storeDispatch(
+          setGlobalCommonState({
+            isPageComplete: true,
+          }),
+        );
       }
-
-      if (customerId) {
-        clearInvoiceCart();
-      }
-
-      storeDispatch(
-        setGlobalCommonState({
-          isPageComplete: true,
-        }),
-      );
     };
 
     init();

@@ -114,37 +114,16 @@ const getAddresses = (companyId: number) => `query Addresses {
   }
 }`;
 
-const quoteCreate = (data: CustomFieldItems) => `mutation CreateQuote{
-  quoteCreate(quoteData: {
-    message: "${data.message}",
-    legalTerms: "${data.legalTerms}",
-    totalAmount: "${data.totalAmount}",
-    grandTotal: "${data.grandTotal}",
-    subtotal: "${data.subtotal || ''}",
-    taxTotal: "${data.taxTotal || ''}"
-    ${data?.companyId ? `companyId: ${data.companyId}` : ''}
-    storeHash: "${data.storeHash}",
-    discount: "${data.discount}",
-    channelId: ${data.channelId},
-    userEmail: "${data?.userEmail || ''}",
-    currency: ${convertObjectToGraphql(data.currency)}
-    shippingAddress: ${convertObjectToGraphql(data.shippingAddress)}
-    billingAddress: ${convertObjectToGraphql(data.billingAddress)}
-    contactInfo: ${convertObjectToGraphql(data.contactInfo)}
-    productList: ${convertArrayToGraphql(data.productList || [])},
-    fileList: ${convertArrayToGraphql(data.fileList || [])},
-    quoteTitle: "${data.quoteTitle}"
-    ${data?.extraFields ? `extraFields: ${convertArrayToGraphql(data?.extraFields || [])}` : ''}
-    ${data?.referenceNumber ? `referenceNumber: "${data?.referenceNumber}"` : ''}
-    ${data?.recipients ? `recipients: ${convertArrayToGraphql(data?.recipients || [])}` : ''}
-  }) {
-    quote{
-      id,
-      createdAt,
-      uuid,
+const quoteCreate = `
+  mutation CreateQuote($quoteData: QuoteInputType!) {
+    quoteCreate(quoteData: $quoteData) {
+      quote {
+        id
+        createdAt
+        uuid
+      }
     }
-  }
-}`;
+  }`;
 
 const quoteUpdate = (data: CustomFieldItems) => `mutation{
   quoteUpdate(
@@ -157,13 +136,18 @@ const quoteUpdate = (data: CustomFieldItems) => `mutation{
   }
 }`;
 
-const getQuoteInfo = (data: { id: number; date: string; uuid?: string }) => `
-  query GetQuoteInfoB2B {
+const getQuoteInfo = `
+  query GetQuoteInfoB2B(
+    $id: Int!
+    $storeHash: String!
+    $date: String!
+    $uuid: String
+  ) {
     quote(
-      id: ${data.id},
-      storeHash: "${storeHash}",
-      date:  "${data?.date || ''}",
-      ${data.uuid ? `uuid: "${data.uuid}",` : ''}
+      id: $id,
+      storeHash: $storeHash,
+      date: $date,
+      uuid: $uuid
     ) {
       id,
       createdAt,
@@ -311,10 +295,15 @@ const getExportQuotePdfQuery = (data: {
   }
 }`;
 
-const getQuoteCheckoutQuery = (data: { id: number }) => `mutation CheckoutQuote {
+const getQuoteCheckoutQuery = `mutation CheckoutQuote(
+  $id: Int!
+  $storeHash: String!
+  $uuid: String
+) {
   quoteCheckout(
-    id: ${data.id},
-    storeHash: "${storeHash}",
+    id: $id,
+    storeHash: $storeHash,
+    uuid: $uuid
   ) {
     quoteCheckout {
       checkoutUrl,
@@ -442,10 +431,50 @@ export const getBCQuotesList = (data: CustomFieldItems) =>
     query: getQuotesList(data, 'bc'),
   }).then((res) => res.customerQuotes);
 
-export const createQuote = (data: CustomFieldItems) =>
-  B3Request.graphqlB2B({
-    query: quoteCreate(data),
+export const createQuote = (data: CustomFieldItems) => {
+  const quoteData = {
+    message: data.message,
+    legalTerms: data.legalTerms,
+    totalAmount: data.totalAmount,
+    grandTotal: data.grandTotal,
+    subtotal: data.subtotal || '',
+    taxTotal: data.taxTotal || '',
+
+    ...(data.companyId && { companyId: Number(data.companyId) }),
+
+    storeHash: data.storeHash,
+    discount: data.discount,
+    channelId: data.channelId,
+    userEmail: data.userEmail || '',
+
+    currency: data.currency,
+    shippingAddress: data.shippingAddress,
+    billingAddress: data.billingAddress,
+    contactInfo: data.contactInfo,
+
+    productList: data.productList || [],
+    fileList: data.fileList || [],
+
+    quoteTitle: data.quoteTitle,
+
+    ...(data.extraFields && {
+      extraFields: data.extraFields || [],
+    }),
+
+    ...(data.referenceNumber && {
+      referenceNumber: data.referenceNumber,
+    }),
+
+    ...(data.recipients && {
+      recipients: data.recipients || [],
+    }),
+  };
+
+  return B3Request.graphqlB2B({
+    query: quoteCreate,
+    variables: { quoteData },
   });
+};
 
 export const updateQuote = (data: CustomFieldItems) =>
   B3Request.graphqlB2B({
@@ -625,12 +654,24 @@ export interface B2BQuoteDetail {
 
 export const getB2BQuoteDetail = (data: { id: number; date: string; uuid?: string }) =>
   B3Request.graphqlB2B({
-    query: getQuoteInfo(data),
+    query: getQuoteInfo,
+    variables: {
+      id: data.id,
+      storeHash,
+      date: data.date || '',
+      uuid: data.uuid || null,
+    },
   });
 
 export const getBcQuoteDetail = (data: { id: number; date: string; uuid?: string }) =>
   B3Request.graphqlB2B({
-    query: getQuoteInfo(data),
+    query: getQuoteInfo,
+    variables: {
+      id: data.id,
+      storeHash,
+      date: data.date || '',
+      uuid: data.uuid || null,
+    },
   });
 
 export const exportQuotePdf = (data: {
@@ -643,9 +684,14 @@ export const exportQuotePdf = (data: {
     query: getExportQuotePdfQuery(data),
   });
 
-export const quoteCheckout = (data: { id: number }) =>
+export const quoteCheckout = ({ id, uuid }: { id: number; uuid?: string }) =>
   B3Request.graphqlB2B({
-    query: getQuoteCheckoutQuery(data),
+    query: getQuoteCheckoutQuery,
+    variables: {
+      id,
+      storeHash,
+      uuid: uuid || null,
+    },
   });
 
 export const quoteDetailAttachFileCreate = (data: CustomFieldItems) =>

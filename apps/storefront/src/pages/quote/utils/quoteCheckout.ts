@@ -11,10 +11,17 @@ interface QuoteCheckout {
   role: string | number;
   location: Location;
   quoteId: string;
+  quoteUuid?: string;
   navigate?: NavigateFunction;
 }
 
-export const handleQuoteCheckout = async ({ role, location, quoteId, navigate }: QuoteCheckout) => {
+export const handleQuoteCheckout = async ({
+  role,
+  location,
+  quoteId,
+  quoteUuid,
+  navigate,
+}: QuoteCheckout) => {
   try {
     store.dispatch(setQuoteDetailToCheckoutUrl(''));
 
@@ -32,9 +39,10 @@ export const handleQuoteCheckout = async ({ role, location, quoteId, navigate }:
 
     const res = await quoteCheckout({
       id: Number(quoteId),
+      uuid: quoteUuid,
     });
 
-    setQuoteToStorage(quoteId, date);
+    setQuoteToStorage(quoteId, date, quoteUuid);
     const {
       quoteCheckout: {
         quoteCheckout: { checkoutUrl, cartId },

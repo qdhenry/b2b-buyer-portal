@@ -15,8 +15,9 @@ export default defineConfig(({ mode }): UserConfig & Pick<ViteUserConfig, 'test'
     experimental: {
       renderBuiltUrl(filename: string) {
         const isCustomBuyerPortal = env.VITE_ASSETS_ABSOLUTE_PATH !== undefined;
+        const assetPath = env.VITE_ASSETS_ABSOLUTE_PATH?.replace(/\/?$/, '/');
         return isCustomBuyerPortal
-          ? `${env.VITE_ASSETS_ABSOLUTE_PATH}${filename}`
+          ? `${assetPath}${filename}`
           : {
               runtime: `window.b2b.__get_asset_location(${JSON.stringify(filename)})`,
             };

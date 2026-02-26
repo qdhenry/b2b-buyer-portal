@@ -206,7 +206,7 @@ const buildSearchProductWith = builder<SearchProduct>(() => ({
   productUrl: faker.internet.url(),
   taxClassId: faker.number.int(),
   isPriceHidden: faker.datatype.boolean(),
-  availableToSell: faker.number.int(),
+  availableToSell: 0,
   unlimitedBackorder: faker.datatype.boolean(),
 }));
 
@@ -296,10 +296,26 @@ const buildGetCartWith = builder<GetCart>(() => {
   };
 });
 
-const buildValidateProductWith = builder<ValidateProduct>(() => ({
-  responseType: faker.helpers.arrayElement(['ERROR', 'WARNING', 'SUCCESS']),
-  message: faker.lorem.sentence(),
-}));
+const buildValidateProductWith = builder<ValidateProduct>(() =>
+  faker.helpers.arrayElement([
+    {
+      responseType: 'SUCCESS',
+      message: faker.lorem.sentence(),
+    },
+    {
+      responseType: 'WARNING',
+      message: faker.lorem.sentence(),
+    },
+    {
+      responseType: 'ERROR',
+      message: faker.lorem.sentence(),
+      errorCode: faker.helpers.arrayElement(['NON_PURCHASABLE', 'OOS', 'INVALID_FIELDS', 'OTHER']),
+      product: {
+        availableToSell: 0,
+      },
+    },
+  ]),
+);
 
 const approvedB2BCompany = buildCompanyStateWith({
   permissions: [{ code: 'purchase_enable', permissionLevel: 1 }],
@@ -1881,10 +1897,8 @@ describe('when adding to quote', () => {
     expect(await screen.findByText('Products were added to your quote')).toBeInTheDocument();
   });
 
-  it('calls validateProducts query when feature flag is enabled', async () => {
-    const featureFlags = {
-      'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
-    };
+  it('calls validateProducts query when backorder is enabled', async () => {
+    const backorderEnabled = true;
 
     const getRecentlyOrderedProducts = vi.fn();
     const searchProducts = vi.fn<(...arg: unknown[]) => SearchProductsResponse>();
@@ -1929,7 +1943,10 @@ describe('when adding to quote', () => {
       )
       .thenReturn({
         data: {
-          validateProduct: buildValidateProductWith({ responseType: 'SUCCESS', message: '' }),
+          validateProduct: buildValidateProductWith({
+            responseType: 'SUCCESS',
+            message: '',
+          }),
         },
       });
 
@@ -1947,7 +1964,7 @@ describe('when adding to quote', () => {
     renderWithProviders(<QuickOrder />, {
       preloadedState: {
         ...preloadedState,
-        global: buildGlobalStateWith({ featureFlags }),
+        global: buildGlobalStateWith({ backorderEnabled }),
       },
       initialGlobalContext: { productQuoteEnabled: true, shoppingListEnabled: true },
     });
@@ -1970,14 +1987,483 @@ describe('when adding to quote', () => {
     expect(validateProduct).toHaveBeenCalled();
     expect(await screen.findByText('Products were added to your quote')).toBeInTheDocument();
   });
+
+  it('displays correct error messages when adding to quote with NON_PURCHASABLE errors', async () => {
+    const backorderEnabled = true;
+
+    const getRecentlyOrderedProducts = vi.fn();
+    const searchProducts = vi.fn<(...arg: unknown[]) => SearchProductsResponse>();
+
+    const nonPurchasableProduct = buildRecentlyOrderedProductNodeWith({
+      node: { productName: 'Non Purchasable Product' },
+    });
+
+    when(getRecentlyOrderedProducts)
+      .calledWith(stringContainingAll('first: 12', 'offset: 0', 'orderBy: "-lastOrderedAt"'))
+      .thenReturn(
+        buildGetRecentlyOrderedProductsWith({
+          data: { orderedProducts: { totalCount: 2, edges: [nonPurchasableProduct] } },
+        }),
+      );
+
+    when(searchProducts)
+      .calledWith(stringContainingAll(`productIds: [${nonPurchasableProduct.node.productId}]`))
+      .thenReturn({
+        data: {
+          productsSearch: [
+            buildSearchProductWith({
+              id: Number(nonPurchasableProduct.node.productId),
+              sku: nonPurchasableProduct.node.variantSku,
+              name: 'Non Purchasable Product',
+              inventoryTracking: 'none',
+              variants: [
+                buildVariantWith({
+                  product_id: Number(nonPurchasableProduct.node.productId),
+                  variant_id: Number(nonPurchasableProduct.node.variantId),
+                  sku: nonPurchasableProduct.node.variantSku,
+                }),
+              ],
+            }),
+          ],
+        },
+      });
+
+    const validateProduct = vi.fn<(...arg: unknown[]) => ValidateProductResponse>();
+
+    when(validateProduct)
+      .calledWith({
+        productId: Number(nonPurchasableProduct.node.productId),
+        variantId: Number(nonPurchasableProduct.node.variantId),
+        quantity: 1,
+        productOptions: [],
+      })
+      .thenReturn({
+        data: {
+          validateProduct: buildValidateProductWith({
+            responseType: 'ERROR',
+            message: 'Product is not purchasable',
+            errorCode: 'NON_PURCHASABLE',
+            product: { availableToSell: 0 },
+          }),
+        },
+      });
+
+    const priceProductsResponse = {
+      priceProducts: [
+        buildProductPriceWith({
+          productId: Number(nonPurchasableProduct.node.productId),
+          variantId: Number(nonPurchasableProduct.node.variantId),
+        }),
+      ],
+    };
+
+    server.use(
+      graphql.query('RecentlyOrderedProducts', ({ query }) =>
+        HttpResponse.json(getRecentlyOrderedProducts(query)),
+      ),
+      graphql.query('SearchProducts', ({ query }) => HttpResponse.json(searchProducts(query))),
+      graphql.query('getCart', () => HttpResponse.json(buildGetCartWith('WHATEVER_VALUES'))),
+      graphql.query('priceProducts', () => HttpResponse.json({ data: priceProductsResponse })),
+      graphql.query('ValidateProduct', ({ variables }) =>
+        HttpResponse.json(validateProduct(variables)),
+      ),
+    );
+
+    renderWithProviders(<QuickOrder />, {
+      preloadedState: {
+        ...preloadedState,
+        global: buildGlobalStateWith({ backorderEnabled }),
+      },
+      initialGlobalContext: { productQuoteEnabled: true, shoppingListEnabled: true },
+    });
+
+    const npRow = await screen.findByRole('row', { name: /Non Purchasable Product/ });
+
+    await userEvent.click(within(npRow).getByRole('checkbox'));
+
+    const addButton = screen.getByRole('button', { name: 'Add selected to' });
+
+    await userEvent.click(addButton);
+
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Add selected to quote' }));
+
+    expect(screen.getByText('SKU Non Purchasable Product no longer for sale')).toBeInTheDocument();
+  });
+
+  it('groups multiple products with the same error type into a single snackbar', async () => {
+    const backorderEnabled = true;
+
+    const getRecentlyOrderedProducts = vi.fn();
+    const searchProducts = vi.fn<(...arg: unknown[]) => SearchProductsResponse>();
+
+    const nonPurchasbleProduct1 = buildRecentlyOrderedProductNodeWith({
+      node: { productName: 'Non Purchasable 1' },
+    });
+
+    const nonPurchasableProduct2 = buildRecentlyOrderedProductNodeWith({
+      node: { productName: 'Non Purchasable 2' },
+    });
+
+    const nonPurchasableProduct3 = buildRecentlyOrderedProductNodeWith({
+      node: { productName: 'Non Purchasable 3' },
+    });
+
+    when(getRecentlyOrderedProducts)
+      .calledWith(stringContainingAll('first: 12', 'offset: 0', 'orderBy: "-lastOrderedAt"'))
+      .thenReturn(
+        buildGetRecentlyOrderedProductsWith({
+          data: {
+            orderedProducts: {
+              totalCount: 3,
+              edges: [nonPurchasbleProduct1, nonPurchasableProduct2, nonPurchasableProduct3],
+            },
+          },
+        }),
+      );
+
+    when(searchProducts)
+      .calledWith(
+        stringContainingAll(
+          `productIds: [${nonPurchasbleProduct1.node.productId},${nonPurchasableProduct2.node.productId},${nonPurchasableProduct3.node.productId}]`,
+        ),
+      )
+      .thenReturn({
+        data: {
+          productsSearch: [
+            buildSearchProductWith({
+              id: Number(nonPurchasbleProduct1.node.productId),
+              sku: nonPurchasbleProduct1.node.variantSku,
+              name: nonPurchasbleProduct1.node.productName,
+              inventoryTracking: 'none',
+              optionsV3: [],
+              variants: [
+                buildVariantWith({
+                  product_id: Number(nonPurchasbleProduct1.node.productId),
+                  variant_id: Number(nonPurchasbleProduct1.node.variantId),
+                  sku: nonPurchasbleProduct1.node.variantSku,
+                }),
+              ],
+            }),
+            buildSearchProductWith({
+              id: Number(nonPurchasableProduct2.node.productId),
+              sku: nonPurchasableProduct2.node.variantSku,
+              name: nonPurchasableProduct2.node.productName,
+              inventoryTracking: 'none',
+              optionsV3: [],
+              variants: [
+                buildVariantWith({
+                  product_id: Number(nonPurchasableProduct2.node.productId),
+                  variant_id: Number(nonPurchasableProduct2.node.variantId),
+                  sku: nonPurchasableProduct2.node.variantSku,
+                }),
+              ],
+            }),
+            buildSearchProductWith({
+              id: Number(nonPurchasableProduct3.node.productId),
+              sku: nonPurchasableProduct3.node.variantSku,
+              name: nonPurchasableProduct3.node.productName,
+              inventoryTracking: 'none',
+              optionsV3: [],
+              variants: [
+                buildVariantWith({
+                  product_id: Number(nonPurchasableProduct3.node.productId),
+                  variant_id: Number(nonPurchasableProduct3.node.variantId),
+                  sku: nonPurchasableProduct3.node.variantSku,
+                }),
+              ],
+            }),
+          ],
+        },
+      });
+
+    const validateProduct = vi.fn<(...arg: unknown[]) => ValidateProductResponse>();
+
+    when(validateProduct)
+      .calledWith(
+        expect.objectContaining({
+          productId: Number(nonPurchasbleProduct1.node.productId),
+          variantId: Number(nonPurchasbleProduct1.node.variantId),
+          quantity: 1,
+        }),
+      )
+      .thenReturn({
+        data: {
+          validateProduct: buildValidateProductWith({
+            responseType: 'ERROR',
+            message: 'Product is not purchasable',
+            errorCode: 'NON_PURCHASABLE',
+            product: {
+              availableToSell: 0,
+            },
+          }),
+        },
+      });
+
+    when(validateProduct)
+      .calledWith({
+        productId: Number(nonPurchasableProduct2.node.productId),
+        variantId: Number(nonPurchasableProduct2.node.variantId),
+        quantity: 1,
+        productOptions: [],
+      })
+      .thenReturn({
+        data: {
+          validateProduct: buildValidateProductWith({
+            responseType: 'ERROR',
+            message: 'Product is not purchasable',
+            errorCode: 'NON_PURCHASABLE',
+            product: {
+              availableToSell: 0,
+            },
+          }),
+        },
+      });
+
+    when(validateProduct)
+      .calledWith({
+        productId: Number(nonPurchasableProduct3.node.productId),
+        variantId: Number(nonPurchasableProduct3.node.variantId),
+        quantity: 1,
+        productOptions: [],
+      })
+      .thenReturn({
+        data: {
+          validateProduct: buildValidateProductWith({
+            responseType: 'ERROR',
+            message: 'Product is not purchasable',
+            errorCode: 'NON_PURCHASABLE',
+            product: {
+              availableToSell: 0,
+            },
+          }),
+        },
+      });
+
+    const priceProductsResponse = {
+      priceProducts: [
+        buildProductPriceWith({
+          productId: Number(nonPurchasbleProduct1.node.productId),
+          variantId: Number(nonPurchasbleProduct1.node.variantId),
+        }),
+        buildProductPriceWith({
+          productId: Number(nonPurchasableProduct2.node.productId),
+          variantId: Number(nonPurchasableProduct2.node.variantId),
+        }),
+        buildProductPriceWith({
+          productId: Number(nonPurchasableProduct3.node.productId),
+          variantId: Number(nonPurchasableProduct3.node.variantId),
+        }),
+      ],
+    };
+
+    server.use(
+      graphql.query('RecentlyOrderedProducts', ({ query }) =>
+        HttpResponse.json(getRecentlyOrderedProducts(query)),
+      ),
+      graphql.query('SearchProducts', ({ query }) => HttpResponse.json(searchProducts(query))),
+      graphql.query('getCart', () => HttpResponse.json(buildGetCartWith('WHATEVER_VALUES'))),
+      graphql.query('priceProducts', () => HttpResponse.json({ data: priceProductsResponse })),
+      graphql.query('ValidateProduct', ({ variables }) =>
+        HttpResponse.json(validateProduct(variables)),
+      ),
+    );
+
+    renderWithProviders(<QuickOrder />, {
+      preloadedState: {
+        ...preloadedState,
+        global: buildGlobalStateWith({ backorderEnabled }),
+      },
+      initialGlobalContext: { productQuoteEnabled: true, shoppingListEnabled: true },
+    });
+
+    const nonPurchasableRow1 = await screen.findByRole('row', { name: /Non Purchasable 1/ });
+    const nonPurchasableRow2 = await screen.findByRole('row', { name: /Non Purchasable 2/ });
+    const nonPurchasableRow3 = await screen.findByRole('row', { name: /Non Purchasable 3/ });
+
+    await userEvent.click(within(nonPurchasableRow1).getByRole('checkbox'));
+    await userEvent.click(within(nonPurchasableRow2).getByRole('checkbox'));
+    await userEvent.click(within(nonPurchasableRow3).getByRole('checkbox'));
+
+    const addButton = screen.getByRole('button', { name: 'Add selected to' });
+    await userEvent.click(addButton);
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Add selected to quote' }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          'SKU Non Purchasable 1, Non Purchasable 2, Non Purchasable 3 no longer for sale',
+        ),
+      ).toBeInTheDocument();
+    });
+
+    expect(validateProduct).toHaveBeenCalledTimes(3);
+  });
+
+  it('adds to quote when threshold error occurs and NP/OOS flag is enabled', async () => {
+    const laughCanister = buildRecentlyOrderedProductNodeWith({
+      node: { productName: 'Laugh Canister' },
+    });
+
+    const recentlyOrderedResponse = buildGetRecentlyOrderedProductsWith({
+      data: { orderedProducts: { totalCount: 1, edges: [laughCanister] } },
+    });
+
+    const searchProductsResponse: SearchProductsResponse = {
+      data: {
+        productsSearch: [
+          buildSearchProductWith({
+            id: Number(laughCanister.node.productId),
+            sku: laughCanister.node.variantSku,
+            name: 'Laugh Canister',
+            inventoryTracking: 'none',
+            variants: [
+              buildVariantWith({
+                product_id: Number(laughCanister.node.productId),
+                variant_id: Number(laughCanister.node.variantId),
+                sku: laughCanister.node.variantSku,
+              }),
+            ],
+          }),
+        ],
+      },
+    };
+
+    const validateProductResponse: ValidateProductResponse = {
+      data: {
+        validateProduct: buildValidateProductWith({
+          responseType: 'ERROR',
+          message: 'You need to purchase a minimum of 5 of the SKU-123 per order.',
+          errorCode: 'OTHER',
+          product: {
+            availableToSell: 0,
+          },
+        }),
+      },
+    };
+
+    const priceProductsResponse = {
+      priceProducts: [
+        buildProductPriceWith({
+          productId: Number(laughCanister.node.productId),
+          variantId: Number(laughCanister.node.variantId),
+        }),
+      ],
+    };
+
+    server.use(
+      graphql.query('RecentlyOrderedProducts', () => HttpResponse.json(recentlyOrderedResponse)),
+      graphql.query('SearchProducts', () => HttpResponse.json(searchProductsResponse)),
+      graphql.query('getCart', () => HttpResponse.json(buildGetCartWith('WHATEVER_VALUES'))),
+      graphql.query('priceProducts', () => HttpResponse.json({ data: priceProductsResponse })),
+      graphql.query('ValidateProduct', () => HttpResponse.json(validateProductResponse)),
+    );
+
+    renderWithProviders(<QuickOrder />, {
+      preloadedState: {
+        ...preloadedState,
+        global: buildGlobalStateWith({
+          backorderEnabled: true,
+          blockPendingQuoteNonPurchasableOOS: { isEnableProduct: true },
+        }),
+      },
+      initialGlobalContext: { productQuoteEnabled: true, shoppingListEnabled: true },
+    });
+
+    const row = await screen.findByRole('row', { name: /Laugh Canister/ });
+    await userEvent.click(within(row).getByRole('checkbox'));
+
+    const addButton = screen.getByRole('button', { name: 'Add selected to' });
+    await userEvent.click(addButton);
+    await userEvent.click(screen.getByRole('menuitem', { name: /Add selected to quote/ }));
+
+    expect(await screen.findByText('Products were added to your quote')).toBeInTheDocument();
+  });
+
+  it('adds to quote when threshold error occurs and NP/OOS flag is disabled', async () => {
+    const laughCanister = buildRecentlyOrderedProductNodeWith({
+      node: { productName: 'Laugh Canister' },
+    });
+
+    const recentlyOrderedResponse = buildGetRecentlyOrderedProductsWith({
+      data: { orderedProducts: { totalCount: 1, edges: [laughCanister] } },
+    });
+
+    const searchProductsResponse: SearchProductsResponse = {
+      data: {
+        productsSearch: [
+          buildSearchProductWith({
+            id: Number(laughCanister.node.productId),
+            sku: laughCanister.node.variantSku,
+            name: 'Laugh Canister',
+            inventoryTracking: 'none',
+            variants: [
+              buildVariantWith({
+                product_id: Number(laughCanister.node.productId),
+                variant_id: Number(laughCanister.node.variantId),
+                sku: laughCanister.node.variantSku,
+              }),
+            ],
+          }),
+        ],
+      },
+    };
+
+    const validateProductResponse: ValidateProductResponse = {
+      data: {
+        validateProduct: buildValidateProductWith({
+          responseType: 'ERROR',
+          message: 'You need to purchase a minimum of 5 of the SKU-123 per order.',
+          errorCode: 'OTHER',
+          product: {
+            availableToSell: 0,
+          },
+        }),
+      },
+    };
+
+    const priceProductsResponse = {
+      priceProducts: [
+        buildProductPriceWith({
+          productId: Number(laughCanister.node.productId),
+          variantId: Number(laughCanister.node.variantId),
+        }),
+      ],
+    };
+
+    server.use(
+      graphql.query('RecentlyOrderedProducts', () => HttpResponse.json(recentlyOrderedResponse)),
+      graphql.query('SearchProducts', () => HttpResponse.json(searchProductsResponse)),
+      graphql.query('getCart', () => HttpResponse.json(buildGetCartWith('WHATEVER_VALUES'))),
+      graphql.query('priceProducts', () => HttpResponse.json({ data: priceProductsResponse })),
+      graphql.query('ValidateProduct', () => HttpResponse.json(validateProductResponse)),
+    );
+
+    renderWithProviders(<QuickOrder />, {
+      preloadedState: {
+        ...preloadedState,
+        global: buildGlobalStateWith({
+          backorderEnabled: true,
+          blockPendingQuoteNonPurchasableOOS: { isEnableProduct: false },
+        }),
+      },
+      initialGlobalContext: { productQuoteEnabled: true, shoppingListEnabled: true },
+    });
+
+    const row = await screen.findByRole('row', { name: /Laugh Canister/ });
+    await userEvent.click(within(row).getByRole('checkbox'));
+
+    const addButton = screen.getByRole('button', { name: 'Add selected to' });
+    await userEvent.click(addButton);
+    await userEvent.click(screen.getByRole('menuitem', { name: /Add selected to quote/ }));
+
+    expect(await screen.findByText('Products were added to your quote')).toBeInTheDocument();
+  });
 });
 
-describe('When backend validation feature flag is on', () => {
-  const featureFlags = {
-    'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
-  };
+describe('when backorder validation is enabled', () => {
+  const backorderEnabled = true;
 
-  const backendValidationEnabledState = {
+  const backorderEnabledState = {
     ...preloadedState,
     company: {
       ...preloadedState.company,
@@ -1986,16 +2472,14 @@ describe('When backend validation feature flag is on', () => {
         role: CustomerRole.SENIOR_BUYER, // Override to Senior Buyer (value 1)
       },
     },
-    global: buildGlobalStateWith({ featureFlags }),
+    global: buildGlobalStateWith({ backorderEnabled }),
   };
 
   it('displays an error message when adding to cart fails', async () => {
     const preloadedStateWithFeatureFlag = {
       ...preloadedState,
       global: buildGlobalStateWith({
-        featureFlags: {
-          'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
-        },
+        backorderEnabled: true,
       }),
     };
     const getRecentlyOrderedProducts = vi.fn();
@@ -2108,9 +2592,7 @@ describe('When backend validation feature flag is on', () => {
     const preloadedStateWithFeatureFlag = {
       ...preloadedState,
       global: buildGlobalStateWith({
-        featureFlags: {
-          'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
-        },
+        backorderEnabled: true,
       }),
     };
 
@@ -2255,9 +2737,7 @@ describe('When backend validation feature flag is on', () => {
     const preloadedStateWithFeatureFlag = {
       ...preloadedState,
       global: buildGlobalStateWith({
-        featureFlags: {
-          'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
-        },
+        backorderEnabled: true,
       }),
     };
     const getRecentlyOrderedProducts = vi.fn();
@@ -2393,9 +2873,7 @@ describe('When backend validation feature flag is on', () => {
     const preloadedStateWithFeatureFlag = {
       ...preloadedState,
       global: buildGlobalStateWith({
-        featureFlags: {
-          'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
-        },
+        backorderEnabled: true,
       }),
     };
 
@@ -2539,9 +3017,7 @@ describe('When backend validation feature flag is on', () => {
     const preloadedStateWithFeatureFlag = {
       ...preloadedState,
       global: buildGlobalStateWith({
-        featureFlags: {
-          'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
-        },
+        backorderEnabled: true,
       }),
     };
 
@@ -2712,6 +3188,8 @@ describe('When backend validation feature flag is on', () => {
           validateProduct: buildValidateProductWith({
             responseType: 'ERROR',
             message: 'SKU OOS-123 is out of stock',
+            errorCode: 'OOS',
+            product: { availableToSell: 1 },
           }),
         },
       });
@@ -2730,7 +3208,7 @@ describe('When backend validation feature flag is on', () => {
       ),
     );
 
-    renderWithProviders(<QuickOrder />, { preloadedState: backendValidationEnabledState });
+    renderWithProviders(<QuickOrder />, { preloadedState: backorderEnabledState });
 
     await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
 
@@ -2745,8 +3223,13 @@ describe('When backend validation feature flag is on', () => {
     const addButton = screen.getByRole('button', { name: /Add products to cart/i });
     await userEvent.click(addButton);
 
-    const error = await screen.findByText('SKU OOS-123 is out of stock');
-    expect(error).toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        screen.getByText('OOS-123 does not have enough stock, please change the quantity'),
+      ).toBeVisible();
+    });
+
+    expect(screen.getByText('1 available')).toBeVisible();
   });
 
   it('quick add displays an error message when trying to add out of stock product to existing cart', async () => {
@@ -2805,6 +3288,8 @@ describe('When backend validation feature flag is on', () => {
           validateProduct: buildValidateProductWith({
             responseType: 'ERROR',
             message: 'Product OOS-123 has insufficient stock',
+            errorCode: 'OOS',
+            product: { availableToSell: 1 },
           }),
         },
       });
@@ -2823,7 +3308,7 @@ describe('When backend validation feature flag is on', () => {
       ),
     );
 
-    renderWithProviders(<QuickOrder />, { preloadedState: backendValidationEnabledState });
+    renderWithProviders(<QuickOrder />, { preloadedState: backorderEnabledState });
 
     await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
 
@@ -2839,8 +3324,12 @@ describe('When backend validation feature flag is on', () => {
     await userEvent.click(addButton);
 
     await waitFor(() => {
-      expect(screen.getByText('Product OOS-123 has insufficient stock')).toBeInTheDocument();
+      expect(
+        screen.getByText('OOS-123 does not have enough stock, please change the quantity'),
+      ).toBeInTheDocument();
     });
+
+    expect(screen.getByText('1 available')).toBeVisible();
   });
 
   it('quick add displays an error message when trying to add non-existent SKU', async () => {
@@ -2873,7 +3362,7 @@ describe('When backend validation feature flag is on', () => {
       graphql.query('getCart', () => HttpResponse.json(getCart())),
     );
 
-    renderWithProviders(<QuickOrder />, { preloadedState: backendValidationEnabledState });
+    renderWithProviders(<QuickOrder />, { preloadedState: backorderEnabledState });
 
     await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
 
@@ -2889,9 +3378,12 @@ describe('When backend validation feature flag is on', () => {
     await userEvent.click(addButton);
 
     const error = await screen.findByText(
-      'SKU NON-EXISTENT-SKU were not found, please check entered values',
+      'SKU NON-EXISTENT-SKU was not found, please check entered values',
     );
+
     expect(error).toBeInTheDocument();
+
+    expect(screen.getByText('SKU not found')).toBeVisible();
   });
 
   it('quick add shows not-found SKU error after adding valid products to cart', async () => {
@@ -2971,7 +3463,7 @@ describe('When backend validation feature flag is on', () => {
       ),
     );
 
-    renderWithProviders(<QuickOrder />, { preloadedState: backendValidationEnabledState });
+    renderWithProviders(<QuickOrder />, { preloadedState: backorderEnabledState });
 
     await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
 
@@ -2987,11 +3479,13 @@ describe('When backend validation feature flag is on', () => {
     const addButton = screen.getByRole('button', { name: /Add products to cart/i });
     await userEvent.click(addButton);
 
-    expect(await screen.findByText('Products were added to cart')).toBeInTheDocument();
+    expect(await screen.findByText('Products were added to cart')).toBeVisible();
 
     expect(
-      await screen.findByText('SKU NOT-FOUND-SKU were not found, please check entered values'),
-    ).toBeInTheDocument();
+      await screen.findByText('SKU NOT-FOUND-SKU was not found, please check entered values'),
+    ).toBeVisible();
+
+    expect(screen.getByText('SKU not found')).toBeVisible();
   });
 
   it('quick add shows not-found SKU error with validation errors for mixed scenario', async () => {
@@ -3065,6 +3559,8 @@ describe('When backend validation feature flag is on', () => {
           validateProduct: buildValidateProductWith({
             responseType: 'ERROR',
             message: 'OUT-OF-STOCK-SKU does not have enough stock, please change the quantity',
+            errorCode: 'OOS',
+            product: { availableToSell: 0 },
           }),
         },
       });
@@ -3108,7 +3604,7 @@ describe('When backend validation feature flag is on', () => {
       ),
     );
 
-    renderWithProviders(<QuickOrder />, { preloadedState: backendValidationEnabledState });
+    renderWithProviders(<QuickOrder />, { preloadedState: backorderEnabledState });
 
     await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
 
@@ -3136,11 +3632,96 @@ describe('When backend validation feature flag is on', () => {
     expect(await screen.findByText('Products were added to cart')).toBeInTheDocument();
 
     expect(
-      await screen.findByText('SKU NOT-FOUND-SKU were not found, please check entered values'),
+      await screen.findByText('SKU NOT-FOUND-SKU was not found, please check entered values'),
     ).toBeInTheDocument();
+
+    expect(screen.getByText('SKU not found')).toBeVisible();
   });
 
-  it('adds a product to the cart succesfully', async () => {
+  it('quick add clears the input values when adding valid products to cart', async () => {
+    const validVariant = buildVariantInfoWith({
+      variantSku: 'VALID-SKU', // Backend will return the sku in uppercase
+      productId: '123',
+      variantId: '456',
+      minQuantity: 0,
+      purchasingDisabled: '0',
+      isStock: '1',
+      stock: 100,
+    });
+
+    const getVariantInfoBySkus = when(vi.fn())
+      .calledWith(expect.stringContaining('variantSkus: ["valid-sku"]'))
+      .thenReturn(buildVariantInfoResponseWith({ data: { variantSku: [validVariant] } }));
+
+    const validateProduct = when(vi.fn())
+      .calledWith(
+        expect.objectContaining({
+          productId: 123,
+        }),
+      )
+      .thenReturn({
+        data: {
+          validateProduct: buildValidateProductWith({
+            responseType: 'SUCCESS',
+            message: '',
+          }),
+        },
+      });
+
+    const createCartSimple = when(vi.fn())
+      .calledWith({
+        createCartInput: {
+          lineItems: [
+            {
+              quantity: 2,
+              productEntityId: 123,
+              variantEntityId: 456,
+              selectedOptions: { multipleChoices: [], textFields: [] },
+            },
+          ],
+        },
+      })
+      .thenReturn({ data: { cart: { createCart: { cart: { entityId: 'test-cart-id' } } } } });
+
+    server.use(
+      graphql.query('RecentlyOrderedProducts', () =>
+        HttpResponse.json({ data: { orderedProducts: { totalCount: 0, edges: [] } } }),
+      ),
+      graphql.query('SearchProducts', () => HttpResponse.json({ data: { productsSearch: [] } })),
+      graphql.query('GetVariantInfoBySkus', ({ query }) =>
+        HttpResponse.json(getVariantInfoBySkus(query)),
+      ),
+      graphql.query('ValidateProduct', ({ variables }) =>
+        HttpResponse.json(validateProduct(variables)),
+      ),
+      graphql.query('getCart', () =>
+        HttpResponse.json(buildGetCartWith({ data: { site: { cart: null } } })),
+      ),
+      graphql.mutation('createCartSimple', ({ variables }) =>
+        HttpResponse.json(createCartSimple(variables)),
+      ),
+    );
+
+    renderWithProviders(<QuickOrder />, { preloadedState: backorderEnabledState });
+
+    await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+    const skuInputs = screen.getAllByLabelText(/SKU#/);
+    const qtyInputs = screen.getAllByLabelText(/Qty/);
+
+    await userEvent.type(skuInputs[0], 'valid-sku'); // ensure sku cleaning is case-insensitive
+    await userEvent.type(qtyInputs[0], '2');
+
+    const addButton = screen.getByRole('button', { name: /Add products to cart/i });
+    await userEvent.click(addButton);
+
+    expect(await screen.findByText('Products were added to cart')).toBeInTheDocument();
+
+    expect(skuInputs[0]).toHaveValue('');
+    expect(qtyInputs[0]).toHaveValue(null);
+  });
+
+  it('adds a product to the cart successfully', async () => {
     const getRecentlyOrderedProducts = vi.fn();
     const searchProducts = vi.fn<(...arg: unknown[]) => SearchProductsResponse>();
     const getCart = vi.fn().mockReturnValue(buildGetCartWith({ data: { site: { cart: null } } }));
@@ -3235,7 +3816,7 @@ describe('When backend validation feature flag is on', () => {
       ),
     );
 
-    renderWithProviders(<QuickOrder />, { preloadedState: backendValidationEnabledState });
+    renderWithProviders(<QuickOrder />, { preloadedState: backorderEnabledState });
 
     const row = await screen.findByRole('row', { name: /Laugh Canister/ });
 
@@ -3272,8 +3853,11 @@ describe('When backend validation feature flag is on', () => {
               validProduct: [
                 buildCSVProductWith({
                   products: {
+                    productId: '1',
+                    variantId: 2,
                     productName: 'Test Product 1',
                     variantSku: 'TEST-SKU-123',
+                    option: [],
                   },
                   qty: '2',
                   row: 1,
@@ -3288,6 +3872,41 @@ describe('When backend validation feature flag is on', () => {
         },
       });
 
+      const productsValidation = vi.fn();
+
+      when(productsValidation)
+        .calledWith({
+          products: expect.arrayContaining([
+            expect.objectContaining({
+              productId: 1,
+              variantId: 2,
+              quantity: 2,
+            }),
+          ]),
+        })
+        .thenReturn({
+          data: {
+            validateProducts: {
+              isValid: true,
+              products: [
+                {
+                  errorCode: 'SUCCESS',
+                  responseType: 'SUCCESS',
+                  message: '',
+                  product: {
+                    productId: 1,
+                    variantId: 2,
+                    quantity: 2,
+                    sku: 'TEST-SKU-123',
+                    availableToSell: 100,
+                    unlimitedBackorder: false,
+                  },
+                },
+              ],
+            },
+          },
+        });
+
       const getCart = vi.fn().mockReturnValue(buildGetCartWith({}));
       const createCartSimple = vi.fn().mockReturnValue({
         data: { cart: { createCart: { cart: { entityId: '12345' } } } },
@@ -3300,6 +3919,9 @@ describe('When backend validation feature flag is on', () => {
         graphql.query('SearchProducts', () => HttpResponse.json(searchProducts())),
         graphql.mutation('ProductUpload', () => HttpResponse.json(csvUpload())),
         graphql.query('getCart', () => HttpResponse.json(getCart())),
+        graphql.query('ValidateProducts', ({ variables }) =>
+          HttpResponse.json(productsValidation(variables)),
+        ),
         graphql.mutation('createCartSimple', () => HttpResponse.json(createCartSimple())),
         graphql.mutation('addCartLineItemsTwo', () =>
           HttpResponse.json(
@@ -3318,7 +3940,7 @@ describe('When backend validation feature flag is on', () => {
         ),
       );
 
-      renderWithProviders(<QuickOrder />, { preloadedState: backendValidationEnabledState });
+      renderWithProviders(<QuickOrder />, { preloadedState: backorderEnabledState });
 
       await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
 
@@ -3375,6 +3997,8 @@ describe('When backend validation feature flag is on', () => {
                 validProduct: [
                   buildCSVProductWith({
                     products: {
+                      productId: '1',
+                      variantId: 2,
                       productName: 'New Cart Product',
                       variantSku: 'NEW-CART-SKU-123',
                     },
@@ -3412,6 +4036,39 @@ describe('When backend validation feature flag is on', () => {
           }),
         );
 
+        const productsValidation = vi.fn();
+
+        when(productsValidation)
+          .calledWith({
+            products: expect.arrayContaining([
+              expect.objectContaining({
+                productId: 1,
+                variantId: 2,
+                quantity: 3,
+              }),
+            ]),
+          })
+          .thenReturn({
+            data: {
+              validateProducts: {
+                isValid: true,
+                products: [
+                  {
+                    errorCode: 'SUCCESS',
+                    responseType: 'SUCCESS',
+                    message: '',
+                    product: {
+                      productId: 1,
+                      variantId: 2,
+                      sku: 'NEW-CART-SKU-123',
+                      availableToSell: 100,
+                      unlimitedBackorder: false,
+                    },
+                  },
+                ],
+              },
+            },
+          });
         server.use(
           graphql.query('RecentlyOrderedProducts', () =>
             HttpResponse.json(getRecentlyOrderedProducts()),
@@ -3419,11 +4076,14 @@ describe('When backend validation feature flag is on', () => {
           graphql.query('SearchProducts', () => HttpResponse.json(searchProducts())),
           graphql.mutation('ProductUpload', () => HttpResponse.json(csvUpload())),
           graphql.query('getCart', () => HttpResponse.json(getCart())),
+          graphql.query('ValidateProducts', ({ variables }) =>
+            HttpResponse.json(productsValidation(variables)),
+          ),
           graphql.mutation('createCartSimple', () => HttpResponse.json(createCartSimple())),
           graphql.mutation('addCartLineItemsTwo', () => HttpResponse.json(addCartLineItemsTwo())),
         );
 
-        renderWithProviders(<QuickOrder />, { preloadedState: backendValidationEnabledState });
+        renderWithProviders(<QuickOrder />, { preloadedState: backorderEnabledState });
 
         await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
 
@@ -3485,6 +4145,8 @@ describe('When backend validation feature flag is on', () => {
                   products: {
                     productName: 'Failed Cart Product',
                     variantSku: 'FAIL-CART-SKU-123',
+                    productId: '1',
+                    variantId: 2,
                   },
                   qty: '2',
                   row: 1,
@@ -3509,6 +4171,27 @@ describe('When backend validation feature flag is on', () => {
         errors: [{ message: 'Failed to create cart due to server error' }],
       });
 
+      const productsValidation = vi.fn().mockReturnValue({
+        data: {
+          validateProducts: {
+            isValid: true,
+            products: [
+              {
+                errorCode: 'SUCCESS',
+                responseType: 'SUCCESS',
+                message: '',
+                product: {
+                  productId: 1,
+                  variantId: 2,
+                  sku: 'FAIL-CART-SKU-123',
+                  availableToSell: 100,
+                  unlimitedBackorder: false,
+                },
+              },
+            ],
+          },
+        },
+      });
       server.use(
         graphql.query('RecentlyOrderedProducts', () =>
           HttpResponse.json(getRecentlyOrderedProducts()),
@@ -3516,10 +4199,13 @@ describe('When backend validation feature flag is on', () => {
         graphql.query('SearchProducts', () => HttpResponse.json(searchProducts())),
         graphql.mutation('ProductUpload', () => HttpResponse.json(csvUpload())),
         graphql.query('getCart', () => HttpResponse.json(getCart())),
+        graphql.query('ValidateProducts', ({ variables }) =>
+          HttpResponse.json(productsValidation(variables)),
+        ),
         graphql.mutation('createCartSimple', () => HttpResponse.json(createCartSimple())),
       );
 
-      renderWithProviders(<QuickOrder />, { preloadedState: backendValidationEnabledState });
+      renderWithProviders(<QuickOrder />, { preloadedState: backorderEnabledState });
 
       await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
 
@@ -3595,6 +4281,41 @@ describe('When backend validation feature flag is on', () => {
         },
       });
 
+      const productsValidation = vi.fn();
+
+      when(productsValidation)
+        .calledWith({
+          products: expect.arrayContaining([
+            expect.objectContaining({
+              productId: 1,
+              variantId: 2,
+              quantity: 1,
+            }),
+          ]),
+        })
+        .thenReturn({
+          data: {
+            validateProducts: {
+              isValid: true,
+              products: [
+                {
+                  errorCode: 'OOS',
+                  responseType: 'ERROR',
+                  message: '',
+                  product: {
+                    productId: 1,
+                    variantId: 2,
+                    quantity: 1,
+                    sku: 'INVALID-SKU-456',
+                    availableToSell: 0,
+                    unlimitedBackorder: false,
+                  },
+                },
+              ],
+            },
+          },
+        });
+
       server.use(
         graphql.query('RecentlyOrderedProducts', () =>
           HttpResponse.json(getRecentlyOrderedProducts()),
@@ -3602,6 +4323,9 @@ describe('When backend validation feature flag is on', () => {
         graphql.query('SearchProducts', () => HttpResponse.json(searchProducts())),
         graphql.mutation('ProductUpload', () => HttpResponse.json(csvUpload())),
         graphql.query('getCart', () => HttpResponse.json(buildGetCartWith({}))),
+        graphql.query('ValidateProducts', ({ variables }) =>
+          HttpResponse.json(productsValidation(variables)),
+        ),
         graphql.mutation('addCartLineItemsTwo', () =>
           HttpResponse.json(
             buildAddCartLineItemsResponseWith({
@@ -3619,7 +4343,7 @@ describe('When backend validation feature flag is on', () => {
         ),
       );
 
-      renderWithProviders(<QuickOrder />, { preloadedState: backendValidationEnabledState });
+      renderWithProviders(<QuickOrder />, { preloadedState: backorderEnabledState });
 
       await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
 
@@ -3669,6 +4393,8 @@ describe('When backend validation feature flag is on', () => {
                   products: {
                     productName: 'Out of Stock Product',
                     variantSku: 'OOS-SKU-123',
+                    productId: '1',
+                    variantId: 2,
                   },
                   qty: '5',
                   row: 1,
@@ -3701,6 +4427,40 @@ describe('When backend validation feature flag is on', () => {
         ],
       });
 
+      const productsValidation = vi.fn();
+
+      when(productsValidation)
+        .calledWith({
+          products: expect.arrayContaining([
+            expect.objectContaining({
+              productId: 1,
+              variantId: 2,
+              quantity: 5,
+            }),
+          ]),
+        })
+        .thenReturn({
+          data: {
+            validateProducts: {
+              isValid: true,
+              products: [
+                {
+                  errorCode: 'OOS',
+                  responseType: 'ERROR',
+                  message: '',
+                  product: {
+                    productId: 1,
+                    variantId: 2,
+                    sku: 'OOS-SKU-123',
+                    availableToSell: 0,
+                    unlimitedBackorder: false,
+                  },
+                },
+              ],
+            },
+          },
+        });
+
       server.use(
         graphql.query('RecentlyOrderedProducts', () =>
           HttpResponse.json(getRecentlyOrderedProducts()),
@@ -3708,6 +4468,9 @@ describe('When backend validation feature flag is on', () => {
         graphql.query('SearchProducts', () => HttpResponse.json(searchProducts())),
         graphql.mutation('ProductUpload', () => HttpResponse.json(csvUpload())),
         graphql.query('getCart', () => HttpResponse.json(getCart())),
+        graphql.query('ValidateProducts', ({ variables }) =>
+          HttpResponse.json(productsValidation(variables)),
+        ),
         graphql.mutation('createCartSimple', () =>
           HttpResponse.json({
             data: { cart: { createCart: { cart: { entityId: '12345' } } } },
@@ -3716,7 +4479,7 @@ describe('When backend validation feature flag is on', () => {
         graphql.mutation('addCartLineItemsTwo', () => HttpResponse.json(addCartLineItemsTwo())),
       );
 
-      renderWithProviders(<QuickOrder />, { preloadedState: backendValidationEnabledState });
+      renderWithProviders(<QuickOrder />, { preloadedState: backorderEnabledState });
 
       await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
 
@@ -3769,6 +4532,8 @@ describe('When backend validation feature flag is on', () => {
                   products: {
                     productName: 'Min Quantity Product',
                     variantSku: 'MIN-QTY-SKU-123',
+                    productId: '1',
+                    variantId: 2,
                   },
                   qty: '1',
                   row: 1,
@@ -3800,6 +4565,28 @@ describe('When backend validation feature flag is on', () => {
         ],
       });
 
+      const productsValidation = vi.fn().mockReturnValue({
+        data: {
+          validateProducts: {
+            isValid: true,
+            products: [
+              {
+                errorCode: 'SUCCESS',
+                responseType: 'SUCCESS',
+                message: '',
+                product: {
+                  productId: 1,
+                  variantId: 2,
+                  quantity: 1,
+                  sku: 'MIN-QTY-SKU-123',
+                  availableToSell: 100,
+                  unlimitedBackorder: false,
+                },
+              },
+            ],
+          },
+        },
+      });
       server.use(
         graphql.query('RecentlyOrderedProducts', () =>
           HttpResponse.json(getRecentlyOrderedProducts()),
@@ -3807,6 +4594,9 @@ describe('When backend validation feature flag is on', () => {
         graphql.query('SearchProducts', () => HttpResponse.json(searchProducts())),
         graphql.mutation('ProductUpload', () => HttpResponse.json(csvUpload())),
         graphql.query('getCart', () => HttpResponse.json(getCart())),
+        graphql.query('ValidateProducts', ({ variables }) =>
+          HttpResponse.json(productsValidation(variables)),
+        ),
         graphql.mutation('createCartSimple', () =>
           HttpResponse.json({
             data: { cart: { createCart: { cart: { entityId: '12345' } } } },
@@ -3815,7 +4605,7 @@ describe('When backend validation feature flag is on', () => {
         graphql.mutation('addCartLineItemsTwo', () => HttpResponse.json(addCartLineItemsTwo())),
       );
 
-      renderWithProviders(<QuickOrder />, { preloadedState: backendValidationEnabledState });
+      renderWithProviders(<QuickOrder />, { preloadedState: backorderEnabledState });
 
       await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
 
@@ -3872,6 +4662,8 @@ describe('When backend validation feature flag is on', () => {
                   products: {
                     productName: 'Error Product',
                     variantSku: 'ERROR-SKU-123',
+                    productId: '1',
+                    variantId: 2,
                   },
                   qty: '1',
                   row: 1,
@@ -3903,6 +4695,31 @@ describe('When backend validation feature flag is on', () => {
         ],
       });
 
+      // return a successful validation response
+      // to test the cart api error message
+      const productsValidation = vi.fn().mockReturnValue({
+        data: {
+          validateProducts: {
+            isValid: true,
+            products: [
+              {
+                errorCode: 'SUCCESS',
+                responseType: 'SUCCESS',
+                message: '',
+                product: {
+                  productId: 1,
+                  variantId: 2,
+                  quantity: 1,
+                  sku: 'ERROR-SKU-123',
+                  availableToSell: 100,
+                  unlimitedBackorder: false,
+                },
+              },
+            ],
+          },
+        },
+      });
+
       server.use(
         graphql.query('RecentlyOrderedProducts', () =>
           HttpResponse.json(getRecentlyOrderedProducts()),
@@ -3910,6 +4727,9 @@ describe('When backend validation feature flag is on', () => {
         graphql.query('SearchProducts', () => HttpResponse.json(searchProducts())),
         graphql.mutation('ProductUpload', () => HttpResponse.json(csvUpload())),
         graphql.query('getCart', () => HttpResponse.json(getCart())),
+        graphql.query('ValidateProducts', ({ variables }) =>
+          HttpResponse.json(productsValidation(variables)),
+        ),
         graphql.mutation('createCartSimple', () =>
           HttpResponse.json({
             data: { cart: { createCart: { cart: { entityId: '12345' } } } },
@@ -3918,7 +4738,7 @@ describe('When backend validation feature flag is on', () => {
         graphql.mutation('addCartLineItemsTwo', () => HttpResponse.json(addCartLineItemsTwo())),
       );
 
-      renderWithProviders(<QuickOrder />, { preloadedState: backendValidationEnabledState });
+      renderWithProviders(<QuickOrder />, { preloadedState: backorderEnabledState });
 
       await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
 
@@ -3957,10 +4777,10 @@ describe('When backend validation feature flag is on', () => {
 
     it('handles successful CSV upload when pass_with_modifiers feature flag is enabled', async () => {
       const preloadedStateWithBothFlags = {
-        ...backendValidationEnabledState,
+        ...backorderEnabledState,
         global: buildGlobalStateWith({
+          backorderEnabled,
           featureFlags: {
-            'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
             'B2B-3978.pass_with_modifiers_to_product_upload': true,
           },
         }),
@@ -3981,6 +4801,8 @@ describe('When backend validation feature flag is on', () => {
                   products: {
                     productName: 'Test Product With Modifiers',
                     variantSku: 'MODIFIER-SKU-123',
+                    productId: '1',
+                    variantId: 2,
                   },
                   qty: '3',
                   row: 1,
@@ -3999,6 +4821,28 @@ describe('When backend validation feature flag is on', () => {
       const createCartSimple = vi.fn().mockReturnValue({
         data: { cart: { createCart: { cart: { entityId: '12345' } } } },
       });
+      const productsValidation = vi.fn().mockReturnValue({
+        data: {
+          validateProducts: {
+            isValid: true,
+            products: [
+              {
+                errorCode: 'SUCCESS',
+                responseType: 'SUCCESS',
+                message: '',
+                product: {
+                  productId: 1,
+                  variantId: 2,
+                  quantity: 3,
+                  sku: 'MODIFIER-SKU-123',
+                  availableToSell: 100,
+                  unlimitedBackorder: false,
+                },
+              },
+            ],
+          },
+        },
+      });
 
       const productUpload = vi.fn();
       when(productUpload)
@@ -4012,6 +4856,9 @@ describe('When backend validation feature flag is on', () => {
         graphql.query('SearchProducts', () => HttpResponse.json(searchProducts())),
         graphql.mutation('ProductUpload', ({ query }) => HttpResponse.json(productUpload(query))),
         graphql.query('getCart', () => HttpResponse.json(getCart())),
+        graphql.query('ValidateProducts', ({ variables }) =>
+          HttpResponse.json(productsValidation(variables)),
+        ),
         graphql.mutation('createCartSimple', () => HttpResponse.json(createCartSimple())),
         graphql.mutation('addCartLineItemsTwo', () =>
           HttpResponse.json(
