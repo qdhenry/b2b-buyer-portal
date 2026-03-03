@@ -436,8 +436,8 @@ export class InvoicePdfGenerator {
         { content: `${item.sku}\n${item.description}`, styles: { cellWidth: 55 } }, // Part & Description
         lotPackData?.lot_num || MISSING_DATA_PLACEHOLDER, // Lot / Serial
         lotPackData?.pack_num || MISSING_DATA_PLACEHOLDER, // Pack Slip
-        `${qty} CS`, // Qty Shipped (assuming Unit is CS for example, or need unit from data)
-        `${unitPrice.toFixed(2)}/E`, // Unit Price
+        `${qty} ${lotPackData?.uom || ''}`, // Qty Shipped (assuming Unit is CS for example, or need unit from data)
+        `${unitPrice.toFixed(2)} `, // Unit Price
         extPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), // Ext Price
       ];
     });
@@ -787,6 +787,7 @@ export class InvoicePdfGenerator {
     // Parse epicorLotPackSlip from invoice extraFields
     // Group by pack slip number to deduplicate (matching example design - 2 columns only)
     const lotPackSlipItems = parseEpicorLotPackSlip(this.invoice.extraFields);
+    console.log('Parsed lot/pack slip items:', lotPackSlipItems);
 
     // Group by pack slip number to get unique pack slip -> tracking number pairs
     const packSlipMap = new Map<string, string>();

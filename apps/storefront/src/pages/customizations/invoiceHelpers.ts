@@ -21,6 +21,7 @@ export interface LotPackSlipItem {
   lot_num: string;
   pack_num: string;
   pack_line: string;
+  uom: string;
 }
 
 /**

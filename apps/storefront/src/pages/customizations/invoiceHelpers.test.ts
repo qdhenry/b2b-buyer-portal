@@ -68,6 +68,7 @@ describe('parseEpicorLotPackSlip', () => {
         lot_num: '213',
         pack_num: '1842617',
         pack_line: '1',
+        uom: 'CS',
       },
       {
         sku: 'CST0225P',
@@ -75,6 +76,7 @@ describe('parseEpicorLotPackSlip', () => {
         lot_num: 'TONS39',
         pack_num: '1842617',
         pack_line: '2',
+        uom: 'EA',
       },
     ];
 
@@ -94,6 +96,7 @@ describe('parseEpicorLotPackSlip', () => {
         lot_num: 'LOT123',
         pack_num: '9999',
         pack_line: '1',
+        uom: 'CS',
       },
     ];
 
@@ -117,6 +120,7 @@ describe('parseEpicorLotPackSlip', () => {
         lot_num: 'L1',
         pack_num: '1001',
         pack_line: '1',
+        uom: 'CS',
       },
     ];
 
