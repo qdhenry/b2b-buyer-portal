@@ -922,9 +922,9 @@ function Invoice() {
               fontSize: '14px',
             }}
           >
-            Invoices for all orders placed after February 19th are available here, reflecting the
-            final invoice amount after your order is shipped. Please contact StatLab customer service
-            to request invoices for website orders placed prior to February 19th.
+            Invoices for all orders placed after March 3rd are available here, reflecting the final
+            invoice amount after your order is shipped. Please contact StatLab customer service to
+            request invoices for website orders placed prior to March 3rd.
           </Typography>
         </Box>
         <Box

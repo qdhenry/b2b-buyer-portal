@@ -113,9 +113,6 @@ export const getCompanyInfo = async (
   if (id && userType === UserTypes.MULTIPLE_B2C && Number(role) !== CustomerRole.SUPER_ADMIN) {
     const { userCompany } = await getUserCompany(id);
 
-    // DEBUG: Log raw userCompany from API
-    console.log('[getCompanyInfo] userCompany from getUserCompany API:', userCompany);
-
     if (userCompany) {
       companyInfo = {
         ...userCompany,
@@ -305,10 +302,6 @@ export const getCurrentCustomerInfo = async (
         companyName: companyInfo.companyName,
         extraFields: companyInfo.extraFields || [],
       };
-
-      // DEBUG: Log companyInfo and companyPayload
-      console.log('[loginInfo] companyInfo from API:', companyInfo);
-      console.log('[loginInfo] companyPayload to Redux:', companyPayload);
 
       const { featureFlags } = store.getState().global;
       const useCombinedQuery =
