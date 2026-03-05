@@ -422,6 +422,14 @@ export class InvoicePdfGenerator {
     // This fixes the bug where duplicate SKUs would show the same pack slip number
     const lotPackSlipByLine = createLotPackSlipLookup(this.invoice.extraFields);
 
+    // Build SKU -> order product name lookup for variant names
+    const skuToProductName = new Map<string, string>();
+    (this.invoice.orderProducts || []).forEach((product) => {
+      if (product.sku && product.name) {
+        skuToProductName.set(product.sku, product.name);
+      }
+    });
+
     // Add line numbers to each item (1, 2, 3...)
     const tableData = lineItems.map((item, index) => {
       const unitPrice = parseFloat(item.unit_price.value);
@@ -431,9 +439,12 @@ export class InvoicePdfGenerator {
       // Look up lot/pack slip data by line number (pack_line is 1-indexed, matching index + 1)
       const lotPackData = lotPackSlipByLine.get(index + 1);
 
+      // Use order product name (includes variant info) if available, else fall back to invoice description
+      const productName = skuToProductName.get(item.sku) || item.description;
+
       return [
         index + 1, // Line number
-        { content: `${item.sku}\n${item.description}`, styles: { cellWidth: 55 } }, // Part & Description
+        { content: `${item.sku}\n${productName}`, styles: { cellWidth: 55 } }, // Part & Description
         lotPackData?.lot_num || MISSING_DATA_PLACEHOLDER, // Lot / Serial
         lotPackData?.pack_num || MISSING_DATA_PLACEHOLDER, // Pack Slip
         `${qty} ${lotPackData?.uom || ''}`, // Qty Shipped (assuming Unit is CS for example, or need unit from data)

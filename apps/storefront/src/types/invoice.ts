@@ -1,5 +1,6 @@
 import { ExtraField } from '@/types/company';
 import { Address as OrderAddress } from '@/types/global';
+import { OrderProductItem } from '@/types/orderDetail';
 
 export interface CompanyInfoTypes {
   companyId: string;
@@ -42,6 +43,8 @@ export interface InvoiceList {
   // STATLAB CUSTOMIZATION: Order addresses for PDF generation when invoice header is empty
   orderBillingAddress?: OrderAddress;
   orderShippingAddress?: OrderAddress;
+  // STATLAB CUSTOMIZATION: Order products for variant name display in PDF
+  orderProducts?: OrderProductItem[];
 }
 
 export interface InvoiceListNode {

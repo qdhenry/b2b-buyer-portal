@@ -1,4 +1,8 @@
-import { fetchOrderAddresses } from '@/pages/customizations/invoiceHelpers';
+import {
+  getBcOrderIdFromInvoice,
+} from '@/pages/customizations/invoiceHelpers';
+import { getB2BOrderDetails, getBCOrderDetails } from '@/shared/service/b2b/graphql/orders';
+import { Address } from '@/types/global';
 import { InvoiceList } from '@/types/invoice';
 import { InvoicePdfGenerator, LogoData } from '@/utils/pdf/InvoicePdfGenerator';
 
@@ -19,33 +23,46 @@ const loadLogoIfNeeded = async (): Promise<LogoData | undefined> => {
 };
 
 /**
- * Enriches invoice data with order addresses when invoice header addresses are missing.
- * This ensures the PDF "Sold To" and "Ship To" sections are populated.
+ * Enriches invoice data with order details for PDF generation.
+ * Fetches order data once to get both missing addresses and product variant names.
  */
-const enrichInvoiceWithOrderAddresses = async (
+const enrichInvoiceForPdf = async (
   invoice: InvoiceList,
   isB2BUser: boolean
 ): Promise<InvoiceList> => {
-  // Check if invoice already has address data in header
-  const hasBillingAddress = !!invoice.details?.header?.billing_address?.street_1;
-  const hasShippingAddress = !!invoice.details?.header?.shipping_addresses?.[0]?.street_1;
+  const orderId = getBcOrderIdFromInvoice(invoice.extraFields);
+  if (!orderId) return invoice;
 
-  if (hasBillingAddress && hasShippingAddress) {
-    return invoice; // Already has addresses, no need to fetch
+  try {
+    const orderDetails = isB2BUser
+      ? await getB2BOrderDetails(orderId)
+      : await getBCOrderDetails(orderId);
+
+    const enriched: InvoiceList = {
+      ...invoice,
+      orderProducts: orderDetails.products || [],
+    };
+
+    // Populate addresses from order if invoice header is missing them
+    const hasBillingAddress = !!invoice.details?.header?.billing_address?.street_1;
+    const hasShippingAddress = !!invoice.details?.header?.shipping_addresses?.[0]?.street_1;
+
+    if (!hasBillingAddress) {
+      enriched.orderBillingAddress = orderDetails.billingAddress || undefined;
+    }
+    if (
+      !hasShippingAddress &&
+      Array.isArray(orderDetails.shippingAddress) &&
+      orderDetails.shippingAddress.length > 0
+    ) {
+      enriched.orderShippingAddress = orderDetails.shippingAddress[0] as Address;
+    }
+
+    return enriched;
+  } catch (error) {
+    console.warn('Failed to enrich invoice for PDF:', error);
+    return invoice;
   }
-
-  // Fetch addresses from the linked order using bcOrderId from extraFields
-  // Note: invoice.orderNumber is always null; the actual BC order ID is in extraFields.bcOrderId
-  const { billingAddress, shippingAddress } = await fetchOrderAddresses(
-    invoice.extraFields,
-    isB2BUser
-  );
-
-  return {
-    ...invoice,
-    orderBillingAddress: billingAddress || undefined,
-    orderShippingAddress: shippingAddress || undefined,
-  };
 };
 
 export const getInvoicePdfUrl = async (
@@ -54,10 +71,10 @@ export const getInvoicePdfUrl = async (
 ): Promise<string> => {
   const logo = await loadLogoIfNeeded();
 
-  // Fetch order addresses if invoice header is missing address data
-  const invoiceWithAddresses = await enrichInvoiceWithOrderAddresses(invoice, isB2BUser);
+  // Enrich invoice with order data (addresses + product variant names)
+  const enrichedInvoice = await enrichInvoiceForPdf(invoice, isB2BUser);
 
-  const generator = new InvoicePdfGenerator(invoiceWithAddresses, logo);
+  const generator = new InvoicePdfGenerator(enrichedInvoice, logo);
   generator.generate();
   return generator.getBlobUrl();
 };
@@ -68,10 +85,10 @@ export const downloadInvoicePdf = async (
 ): Promise<void> => {
   const logo = await loadLogoIfNeeded();
 
-  // Fetch order addresses if invoice header is missing address data
-  const invoiceWithAddresses = await enrichInvoiceWithOrderAddresses(invoice, isB2BUser);
+  // Enrich invoice with order data (addresses + product variant names)
+  const enrichedInvoice = await enrichInvoiceForPdf(invoice, isB2BUser);
 
-  const generator = new InvoicePdfGenerator(invoiceWithAddresses, logo);
+  const generator = new InvoicePdfGenerator(enrichedInvoice, logo);
   generator.generate();
   generator.save();
 };
