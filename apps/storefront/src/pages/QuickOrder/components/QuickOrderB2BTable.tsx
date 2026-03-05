@@ -46,7 +46,11 @@ interface ProductInfoProps {
   variantId: number;
   variantSku: string;
   productsSearch: ProductInfoType;
+  disableCurrentCheckbox?: boolean;
 }
+
+const isProductUnavailable = (node: CustomFieldItems) =>
+  !node.productsSearch || Object.keys(node.productsSearch).length === 0;
 
 interface ListItemProps {
   node: ProductInfoProps;
@@ -170,6 +174,7 @@ function QuickOrderTable({
           });
 
           node.productsSearch = productInfo || {};
+          node.disableCurrentCheckbox = !productInfo;
         });
 
         return listProducts;
@@ -314,6 +319,7 @@ function QuickOrderTable({
       title: b3Lang('purchasedProducts.product'),
       render: (row: CustomFieldItems) => {
         const { optionList, productsSearch, variantId } = row;
+        const unavailable = isProductUnavailable(row);
         const currentVariants = productsSearch.variants || [];
 
         const currentImage =
@@ -323,6 +329,7 @@ function QuickOrderTable({
             sx={{
               display: 'flex',
               alignItems: 'flex-start',
+              opacity: unavailable ? 0.45 : 1,
             }}
           >
             <StyledImage
@@ -337,6 +344,18 @@ function QuickOrderTable({
               <Typography variant="body1" color="#616161">
                 {row.variantSku}
               </Typography>
+              {unavailable && (
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: '#d32f2f',
+                    fontSize: '0.75rem',
+                    mt: 0.5,
+                  }}
+                >
+                  Product unavailable
+                </Typography>
+              )}
               {optionList.length > 0 && (
                 <Box>
                   {optionList.map((option: any) => (
@@ -364,6 +383,13 @@ function QuickOrderTable({
       key: 'price',
       title: b3Lang('purchasedProducts.price'),
       render: (row: CustomFieldItems) => {
+        const unavailable = isProductUnavailable(row);
+        if (unavailable) {
+          return (
+            <Typography sx={{ padding: '12px 0', opacity: 0.45 }}>—</Typography>
+          );
+        }
+
         const {
           productsSearch: { variants },
           variantId,
@@ -398,6 +424,7 @@ function QuickOrderTable({
       key: 'qty',
       title: b3Lang('purchasedProducts.qty'),
       render: (row) => {
+        const unavailable = isProductUnavailable(row);
         const qty = handleSetCheckedQty(row);
 
         return (
@@ -406,10 +433,12 @@ function QuickOrderTable({
             type="number"
             variant="filled"
             value={qty}
+            disabled={unavailable}
             inputProps={{
               inputMode: 'numeric',
               pattern: '[0-9]*',
             }}
+            sx={unavailable ? { opacity: 0.45 } : undefined}
             onChange={(e) => {
               handleUpdateProductQty(row.id, e.target.value);
             }}
@@ -541,6 +570,7 @@ function QuickOrderTable({
           showCheckbox
           showSelectAllCheckbox
           disableCheckbox={false}
+          applyAllDisableCheckbox={false}
           hover
           labelRowsPerPage={b3Lang('purchasedProducts.itemsPerPage')}
           showBorder={false}
@@ -557,6 +587,9 @@ function QuickOrderTable({
               item={row}
               checkBox={checkBox}
               handleUpdateProductQty={handleUpdateProductQty}
+              isUnavailable={
+                !row.productsSearch || Object.keys(row.productsSearch).length === 0
+              }
             />
           )}
         />

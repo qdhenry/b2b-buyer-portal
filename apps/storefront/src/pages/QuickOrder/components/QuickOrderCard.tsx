@@ -9,8 +9,9 @@ import { displayFormat } from '@/utils/b3DateFormat';
 
 interface QuickOrderCardProps {
   item: any;
-  checkBox?: () => ReactElement;
+  checkBox?: (disable?: boolean) => ReactElement;
   handleUpdateProductQty: (id: number, val: string) => void;
+  isUnavailable?: boolean;
 }
 
 const StyledImage = styled('img')(() => ({
@@ -20,7 +21,7 @@ const StyledImage = styled('img')(() => ({
 }));
 
 function QuickOrderCard(props: QuickOrderCardProps) {
-  const { item: shoppingDetail, checkBox, handleUpdateProductQty } = props;
+  const { item: shoppingDetail, checkBox, handleUpdateProductQty, isUnavailable = false } = props;
   const b3Lang = useB3Lang();
 
   const {
@@ -53,8 +54,8 @@ function QuickOrderCard(props: QuickOrderCardProps) {
           pl: 0,
         }}
       >
-        <Box>{checkBox && checkBox()}</Box>
-        <Box>
+        <Box>{checkBox && checkBox(isUnavailable)}</Box>
+        <Box sx={isUnavailable ? { opacity: 0.45 } : undefined}>
           <StyledImage
             src={currentImage || PRODUCT_DEFAULT_IMAGE}
             alt="Product-img"
@@ -64,6 +65,7 @@ function QuickOrderCard(props: QuickOrderCardProps) {
         <Box
           sx={{
             flex: 1,
+            opacity: isUnavailable ? 0.45 : 1,
           }}
         >
           <Typography variant="body1" color="#212121">
@@ -72,6 +74,19 @@ function QuickOrderCard(props: QuickOrderCardProps) {
           <Typography variant="body1" color="#616161">
             {variantSku}
           </Typography>
+          {isUnavailable && (
+            <Typography
+              variant="body2"
+              sx={{
+                color: '#d32f2f',
+                fontSize: '0.75rem',
+                mt: 0.5,
+                opacity: 1,
+              }}
+            >
+              Product unavailable
+            </Typography>
+          )}
           <Box
             sx={{
               margin: '1rem 0',
@@ -96,9 +111,11 @@ function QuickOrderCard(props: QuickOrderCardProps) {
           </Box>
 
           <Typography sx={{ fontSize: '14px' }}>
-            {b3Lang('purchasedProducts.quickOrderCard.price', {
-              price: currencyFormat(price),
-            })}
+            {isUnavailable
+              ? `${b3Lang('purchasedProducts.quickOrderCard.price', { price: '—' })}`
+              : b3Lang('purchasedProducts.quickOrderCard.price', {
+                  price: currencyFormat(price),
+                })}
           </Typography>
           <Box
             sx={{
@@ -112,6 +129,7 @@ function QuickOrderCard(props: QuickOrderCardProps) {
               type="number"
               variant="filled"
               label="Qty"
+              disabled={isUnavailable}
               inputProps={{
                 inputMode: 'numeric',
                 pattern: '[0-9]*',
