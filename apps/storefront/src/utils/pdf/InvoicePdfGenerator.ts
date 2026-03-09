@@ -425,8 +425,11 @@ export class InvoicePdfGenerator {
     // Build SKU -> order product name lookup for variant names
     const skuToProductName = new Map<string, string>();
     (this.invoice.orderProducts || []).forEach((product) => {
-      if (product.sku && product.name) {
-        skuToProductName.set(product.sku, product.name);
+      if (product.sku) {
+        const variantName = product.product_options?.length
+          ? product.product_options.map((o: { display_value: string }) => o.display_value).join(', ')
+          : product.name;
+        skuToProductName.set(product.sku, variantName || product.name);
       }
     });
 

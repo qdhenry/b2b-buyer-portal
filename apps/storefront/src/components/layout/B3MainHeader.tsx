@@ -30,10 +30,6 @@ export default function MainHeader({ title }: { title: string }) {
 
   const customerId = getCustomerId();
 
-  // DEBUG: Log extraFields and customerId
-  console.log('[B3MainHeader] companyInfo:', companyInfo);
-  console.log('[B3MainHeader] extraFields:', extraFields);
-  console.log('[B3MainHeader] customerId:', customerId);
   const salesRepCompanyName = useAppSelector(
     ({ b2bFeatures }) => b2bFeatures.masqueradeCompany.companyName,
   );

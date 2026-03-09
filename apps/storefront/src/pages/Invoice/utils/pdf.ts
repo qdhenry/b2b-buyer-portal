@@ -26,11 +26,15 @@ const loadLogoIfNeeded = async (): Promise<LogoData | undefined> => {
  * Enriches invoice data with order details for PDF generation.
  * Fetches order data once to get both missing addresses and product variant names.
  */
-const enrichInvoiceForPdf = async (
+export const enrichInvoiceForPdf = async (
   invoice: InvoiceList,
   isB2BUser: boolean
 ): Promise<InvoiceList> => {
-  const orderId = getBcOrderIdFromInvoice(invoice.extraFields);
+  let orderId = getBcOrderIdFromInvoice(invoice.extraFields);
+  // Fall back to invoice.orderNumber (which is the BC order ID)
+  if (!orderId && invoice.orderNumber) {
+    orderId = parseInt(invoice.orderNumber, 10) || null;
+  }
   if (!orderId) return invoice;
 
   try {
