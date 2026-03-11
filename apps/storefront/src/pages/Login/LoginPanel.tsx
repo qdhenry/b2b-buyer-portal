@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom';
 import { Box, Button, useTheme } from '@mui/material';
 
 import { useMobile } from '@/hooks/useMobile';
@@ -46,8 +45,8 @@ function LoginPanel(props: LoginPanelProps) {
         }}
       >
         <Button
-          component={Link}
-          to="/register"
+          component="a"
+          href="https://form.typeform.com/to/JB1PQf2o"
           variant="contained"
           sx={{
             ml: isMobile ? 0 : 1,
